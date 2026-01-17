@@ -21,7 +21,7 @@ const steps = [
 
 export function HowItWorksSection() {
   return (
-    <section className="w-full py-16 md:py-24">
+    <section id="how-it-works" className="w-full py-16 md:py-24">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="text-center mb-12">
           <h2 className="font-heading text-3xl md:text-4xl font-bold mb-4" data-testid="text-section-title">

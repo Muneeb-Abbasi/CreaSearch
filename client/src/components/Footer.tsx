@@ -33,14 +33,14 @@ export function Footer() {
             <h3 className="font-semibold mb-4">For Creators</h3>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link href="/join" className="text-muted-foreground hover:text-primary transition-colors">
+                <Link href="/login" className="text-muted-foreground hover:text-primary transition-colors">
                   Join Platform
                 </Link>
               </li>
               <li>
-                <Link href="/pricing" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="/#pricing" className="text-muted-foreground hover:text-primary transition-colors">
                   Pricing
-                </Link>
+                </a>
               </li>
               <li>
                 <Link href="/success-stories" className="text-muted-foreground hover:text-primary transition-colors">
@@ -59,14 +59,14 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/how-it-works" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="/#how-it-works" className="text-muted-foreground hover:text-primary transition-colors">
                   How It Works
-                </Link>
+                </a>
               </li>
               <li>
-                <Link href="/enterprise" className="text-muted-foreground hover:text-primary transition-colors">
+                <a href="/#pricing" className="text-muted-foreground hover:text-primary transition-colors">
                   Enterprise
-                </Link>
+                </a>
               </li>
             </ul>
           </div>

@@ -1,5 +1,7 @@
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
+import creatorProfileImage from "@assets/generated_images/creator_profile_mockup.png";
 
 const benefits = [
   "Build a professional profile with video introduction and portfolio",
@@ -14,21 +16,11 @@ export function ForCreatorsSection() {
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
           <div className="order-2 lg:order-1 relative">
-            <div className="bg-card border border-card-border rounded-lg p-8 space-y-6">
-              <div className="flex items-center gap-4">
-                <div className="w-20 h-20 rounded-full bg-muted"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-muted rounded w-2/3"></div>
-                  <div className="h-3 bg-muted rounded w-1/2"></div>
-                </div>
-              </div>
-              <div className="aspect-video bg-muted rounded-md"></div>
-              <div className="space-y-3">
-                <div className="h-3 bg-muted rounded w-full"></div>
-                <div className="h-3 bg-muted rounded w-5/6"></div>
-                <div className="h-3 bg-muted rounded w-4/6"></div>
-              </div>
-            </div>
+            <img
+              src={creatorProfileImage}
+              alt="Creator profile preview"
+              className="w-full max-w-md mx-auto rounded-lg shadow-xl"
+            />
           </div>
 
           <div className="order-1 lg:order-2">
@@ -46,12 +38,15 @@ export function ForCreatorsSection() {
                 </li>
               ))}
             </ul>
-            <Button size="lg" data-testid="button-create-profile">
-              Create Your Profile
-            </Button>
+            <Link href="/login">
+              <Button size="lg" data-testid="button-create-profile">
+                Create Your Profile
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
     </section>
   );
 }
+

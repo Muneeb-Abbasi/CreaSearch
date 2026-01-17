@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check } from "lucide-react";
@@ -14,6 +15,7 @@ const plans = [
       "Basic analytics",
     ],
     cta: "Get Started",
+    ctaLink: "/login",
     highlighted: false,
   },
   {
@@ -29,6 +31,7 @@ const plans = [
       "Verification badge",
     ],
     cta: "Upgrade Now",
+    ctaLink: "/login",
     highlighted: true,
   },
   {
@@ -44,13 +47,14 @@ const plans = [
       "Priority support",
     ],
     cta: "Start Searching",
+    ctaLink: "/search",
     highlighted: false,
   },
 ];
 
 export function PricingSection() {
   return (
-    <section className="w-full py-16 md:py-24 bg-muted/30">
+    <section id="pricing" className="w-full py-16 md:py-24 bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
         <div className="text-center mb-12">
           <h2 className="font-heading text-3xl md:text-4xl font-bold mb-4" data-testid="text-section-title">
@@ -91,13 +95,15 @@ export function PricingSection() {
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button
-                  className="w-full"
-                  variant={plan.highlighted ? "default" : "outline"}
-                  data-testid={`button-plan-${index}`}
-                >
-                  {plan.cta}
-                </Button>
+                <Link href={plan.ctaLink} className="w-full">
+                  <Button
+                    className="w-full"
+                    variant={plan.highlighted ? "default" : "outline"}
+                    data-testid={`button-plan-${index}`}
+                  >
+                    {plan.cta}
+                  </Button>
+                </Link>
               </CardFooter>
             </Card>
           ))}
@@ -106,3 +112,4 @@ export function PricingSection() {
     </section>
   );
 }
+

@@ -1,54 +1,57 @@
-# Creasearch Marketplace - Implementation Plan v2
+# Creasearch - Implementation Plan v3
 
 ## Architecture Overview
 
-```mermaid
-flowchart LR
-    subgraph "Frontend (Vercel)"
-        A[React App]
-    end
-    subgraph "Backend (Supabase)"
-        B[(PostgreSQL)]
-        C[Auth]
-        D[Storage]
-        E[Edge Functions]
-    end
-    subgraph "External"
-        F[Resend Email]
-        G[Hostinger DNS]
-    end
-    A --> B
-    A --> C
-    A --> D
-    A --> F
-    G --> A
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      CREASEARCH STACK                        │
+├─────────────────────────────────────────────────────────────┤
+│  Frontend          │  Vite + React + TypeScript             │
+│  Backend           │  Node.js + Express.js                  │
+│  Database          │  Supabase PostgreSQL (Singapore)       │
+│  Authentication    │  Supabase Auth (Google OAuth)          │
+│  File Storage      │  Supabase Storage                      │
+│  Email             │  Resend                                │
+│  Deployment        │  Vercel                                │
+│  Domain/DNS        │  Hostinger                             │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-| Component | Service | Region |
-|-----------|---------|--------|
-| Frontend | Vercel | Auto (Edge) |
+| Component | Technology | Region |
+|-----------|------------|--------|
+| Frontend | Vite + React | Vercel Edge |
+| Backend | Express.js (API) | Vercel Serverless |
 | Database | Supabase PostgreSQL | Singapore |
 | Auth | Supabase Auth | Singapore |
-| File Storage | Supabase Storage | Singapore |
+| Storage | Supabase Storage | Singapore |
 | Email | Resend | - |
-| Domain/DNS | Hostinger | - |
+| DNS | Hostinger | - |
 
 ---
 
-## User Review Required
+## Project Structure
 
-> [!WARNING]
-> **Architecture Decision Needed**: The current codebase uses **Vite + React + Express**, but boss specs show **Next.js on Vercel**. Options:
-> 1. **Keep Vite + React** – Deploy static build to Vercel, use Supabase client directly
-> 2. **Migrate to Next.js** – Rewrite using Next.js App Router (significant effort ~2-3 days)
-> 
-> **Recommendation**: Option 1 is faster. Vite builds deploy fine to Vercel. We can add Next.js later.
+```
+CreasearchMarket/
+├── client/                  # React frontend (Vite)
+│   └── src/
+│       ├── pages/           # Page components
+│       ├── components/      # UI components
+│       ├── lib/             # Supabase client, utils
+│       └── contexts/        # Auth context
+├── server/                  # Express.js backend
+│   ├── index.ts             # Server entry
+│   ├── routes.ts            # API routes
+│   ├── controllers/         # Route handlers
+│   ├── middleware/          # Auth, validation
+│   └── services/            # Business logic
+├── shared/                  # Shared types
+└── db/                      # Database schema (Drizzle)
+```
 
 ---
 
 ## Database Schema (Supabase PostgreSQL)
-
-### Core Tables
 
 ```sql
 -- profiles (creators & organizations)
@@ -111,12 +114,44 @@ CREATE TABLE reviews (
 
 ---
 
-## Security Hardening
+## API Endpoints (Express.js)
+
+### Auth
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/google` | Google OAuth callback |
+| POST | `/api/auth/logout` | Logout user |
+| GET | `/api/auth/me` | Get current user |
+
+### Profiles
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/profiles` | List creators (with filters) |
+| GET | `/api/profiles/:id` | Get single profile |
+| POST | `/api/profiles` | Create profile |
+| PUT | `/api/profiles/:id` | Update profile |
+| DELETE | `/api/profiles/:id` | Delete profile |
+
+### Admin
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/admin/pending` | Get pending profiles |
+| POST | `/api/admin/approve/:id` | Approve profile |
+| POST | `/api/admin/reject/:id` | Reject profile |
+
+### Inquiries
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/inquiries` | Send inquiry |
+| GET | `/api/inquiries` | List user's inquiries |
+| PUT | `/api/inquiries/:id/status` | Update inquiry status |
+
+---
+
+## Security
 
 ### 1. Row-Level Security (RLS)
-
 ```sql
--- Profiles: Public read for approved, owner write
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Public profiles readable" ON profiles
@@ -124,111 +159,75 @@ CREATE POLICY "Public profiles readable" ON profiles
 
 CREATE POLICY "Users manage own profile" ON profiles
   FOR ALL USING (auth.uid() = user_id);
-
-CREATE POLICY "Admins manage all" ON profiles
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE user_id = auth.uid() AND role = 'admin')
-  );
-
--- Inquiries: Only participants can view
-ALTER TABLE inquiries ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Inquiry participants only" ON inquiries
-  FOR SELECT USING (
-    from_user_id = auth.uid() OR 
-    to_profile_id IN (SELECT id FROM profiles WHERE user_id = auth.uid())
-  );
 ```
 
-### 2. Input Validation (Frontend + Backend)
+### 2. Express Middleware
+- JWT validation via Supabase
+- Rate limiting (express-rate-limit)
+- Input validation (Zod)
+- CORS configuration
 
-- Zod schemas for all form inputs
-- Server-side validation via Supabase Edge Functions for critical operations
-- File upload validation: image (max 5MB, JPG/PNG), video (max 50MB, MP4/MOV)
-
-### 3. Rate Limiting
-
-- Supabase has built-in rate limiting
-- Additional: 10 inquiries/hour per user (via Edge Function)
-
-### 4. Auth Security
-
-- **Google OAuth** (primary) — instant verification, no email confirmation needed
-- Email/password as fallback option
-- Password: min 8 chars, complexity check
-- Session timeout: 7 days
-
-> **Google OAuth is FREE** with Supabase. Requires:
-> 1. Google Cloud project (free)
-> 2. OAuth Client ID & Secret
-> 3. Configure in Supabase Auth settings
-
-### 5. Storage Security
-
-```sql
--- Storage policies for profile-photos bucket
-CREATE POLICY "Users upload own photos"
-ON storage.objects FOR INSERT
-WITH CHECK (bucket_id = 'profile-photos' AND auth.uid()::text = (storage.foldername(name))[1]);
-```
+### 3. Auth Flow
+- Google OAuth → Supabase Auth
+- JWT tokens stored in HTTP-only cookies
+- Protected routes require valid session
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Supabase Setup
-- [ ] Create Supabase project (Singapore region)
-- [ ] Create database tables with RLS policies
-- [ ] Configure Auth (email/password + Google OAuth)
-- [ ] Set up Google Cloud OAuth credentials
-- [ ] Create storage buckets (`profile-photos`, `intro-videos`)
-- [ ] Store keys in `.env.local`
+### Phase 1: Supabase Setup ✅
+- [x] Create Supabase project (Singapore region)
+- [x] Create database tables
+- [x] Enable RLS policies
+- [x] Configure Google OAuth in Supabase
+- [x] Create storage buckets
+- [x] Get connection string for Express
+- [x] Configure environment variables (.env)
 
-### Phase 2: Replace Backend
-- [ ] Remove Express server files (`server/` folder)
-- [ ] Install `@supabase/supabase-js`
-- [ ] Create Supabase client in `client/src/lib/supabase.ts`
-- [ ] Update API calls to use Supabase client
+### Phase 2: Express Backend ✅
+- [x] Install Supabase JS client
+- [x] Create database service layer
+- [x] Build profile API endpoints
+- [x] Build admin API endpoints
+- [ ] Implement auth middleware (protected routes)
+- [ ] Build inquiry API endpoints
+- [ ] Add input validation (Zod)
+- [ ] Add rate limiting
 
-### Phase 3: Auth Integration
-- [ ] Create auth context with Supabase Auth
-- [ ] Build login/signup modals (reuse existing UI)
-- [ ] Add "Continue with Google" button (primary)
-- [ ] Add email/password as fallback
-- [ ] Protect routes (profile creation, admin)
+### Phase 3: Frontend Auth Integration ✅
+- [x] Create AuthContext
+- [x] Connect Google OAuth
+- [x] Header user menu (logged in state)
+- [x] Fix Vite env loading (envDir config)
+- [ ] Protected route wrapper
 
-### Phase 4: Connect Pages to Supabase
-- [ ] `SearchPage.tsx` → query `profiles` table
-- [ ] `CreatorProfilePage.tsx` → fetch by ID
-- [ ] `ProfileCreationPage.tsx` → insert/update + file upload
-- [ ] `AdminDashboardPage.tsx` → pending profiles, approve/reject
+### Phase 4: Connect Frontend to API (Partial)
+- [x] Create API service layer (api.ts)
+- [ ] SearchPage → GET /api/profiles
+- [ ] CreatorProfilePage → GET /api/profiles/:id
+- [ ] ProfileCreationPage → POST/PUT /api/profiles
+- [ ] AdminDashboardPage → admin endpoints
 
 ### Phase 5: File Uploads
 - [ ] Profile photo upload to Supabase Storage
-- [ ] Video intro upload (or YouTube URL validation)
-- [ ] Display uploaded media in profiles
+- [ ] Video intro upload or YouTube URL
+- [ ] Display media in profiles
 
-### Phase 6: Email Integration (Resend)
-- [ ] Create Resend account, verify domain
-- [ ] Add DNS TXT records in Hostinger
-- [ ] Create Edge Function for inquiry notifications
-- [ ] Send emails on: new inquiry, profile approved/rejected
+### Phase 6: Email (Resend)
+- [ ] Configure Resend
+- [ ] Inquiry notification emails
+- [ ] Profile approved/rejected emails
 
 ### Phase 7: Deployment
-- [ ] Connect repo to Vercel
+- [ ] Deploy to Vercel
 - [ ] Configure environment variables
-- [ ] Deploy and test on `*.vercel.app`
-- [ ] Add custom domain in Vercel
-- [ ] Configure DNS in Hostinger (CNAME → `cname.vercel-dns.com`)
-
-### Phase 8: Creasearch Score
-- [ ] Create Edge Function for score calculation
-- [ ] Schedule bi-weekly cron (Supabase pg_cron or external)
-- [ ] Score formula: `0.4×reach + 0.2×completion + 0.1×verification + 0.3×gigs`
+- [ ] Connect custom domain
+- [ ] Configure Hostinger DNS
 
 ---
 
-## Creasearch Score Calculation
+## Creasearch Score
 
 ```typescript
 function calculateScore(profile: Profile): number {
@@ -248,28 +247,31 @@ function calculateScore(profile: Profile): number {
 
 ---
 
-## Out of Scope (Confirmed)
+## Out of Scope
 
-- ❌ Payments / Stripe / Subscriptions
+- ❌ Payments / Stripe
 - ❌ In-app chat
 - ❌ Automated scheduling
 - ❌ Mobile apps
 
 ---
 
-## Risk Mitigation
+## Environment Variables
 
-| Risk | Mitigation |
-|------|------------|
-| Supabase downtime | Monitor status page, consider backup strategy |
-| No background jobs | Use Supabase pg_cron for score updates |
-| No backup strategy | Enable Supabase daily backups (Pro plan) or manual exports |
-| Social API rate limits | Cache follower counts, update weekly max |
+```env
+# Supabase
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=xxx
+SUPABASE_SERVICE_ROLE_KEY=xxx
 
----
+# Google OAuth (configured in Supabase)
+GOOGLE_CLIENT_ID=xxx
+GOOGLE_CLIENT_SECRET=xxx
 
-## Questions for User
+# Resend
+RESEND_API_KEY=xxx
 
-1. **Vite vs Next.js** – Confirm keeping current Vite + React setup?
-2. **Email provider** – Resend or SendGrid preference?
-3. **Social API keys** – Do you have API access for YouTube/Instagram follower counts, or use manual entry for v1?
+# App
+VITE_SUPABASE_URL=xxx
+VITE_SUPABASE_ANON_KEY=xxx
+```

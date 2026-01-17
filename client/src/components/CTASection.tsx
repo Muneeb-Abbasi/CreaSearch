@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 
 export function CTASection() {
@@ -11,14 +12,19 @@ export function CTASection() {
           Join thousands of creators and organizations building amazing content together
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button size="lg" data-testid="button-cta-creator">
-            Join as Creator
-          </Button>
-          <Button size="lg" variant="outline" data-testid="button-cta-organization">
-            Find Creators
-          </Button>
+          <Link href="/login">
+            <Button size="lg" data-testid="button-cta-creator">
+              Join as Creator
+            </Button>
+          </Link>
+          <Link href="/search">
+            <Button size="lg" variant="outline" data-testid="button-cta-organization">
+              Find Creators
+            </Button>
+          </Link>
         </div>
       </div>
     </section>
   );
 }
+

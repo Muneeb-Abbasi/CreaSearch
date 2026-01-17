@@ -1,5 +1,7 @@
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2 } from "lucide-react";
+import searchDashboardImage from "@assets/generated_images/search_dashboard_mockup.png";
 
 const benefits = [
   "Advanced search filters by expertise, location, and audience size",
@@ -28,33 +30,23 @@ export function ForOrganizationsSection() {
                 </li>
               ))}
             </ul>
-            <Button size="lg" data-testid="button-start-searching">
-              Start Searching
-            </Button>
+            <Link href="/search">
+              <Button size="lg" data-testid="button-start-searching">
+                Start Searching
+              </Button>
+            </Link>
           </div>
 
           <div className="relative">
-            <div className="bg-card border border-card-border rounded-lg p-8 space-y-6">
-              <div className="space-y-3">
-                <div className="h-4 bg-muted rounded w-3/4"></div>
-                <div className="h-4 bg-muted rounded w-1/2"></div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="aspect-square bg-muted rounded-md"></div>
-                ))}
-              </div>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <div className="h-6 bg-primary/20 rounded w-16"></div>
-                  <div className="h-6 bg-primary/20 rounded w-20"></div>
-                  <div className="h-6 bg-primary/20 rounded w-16"></div>
-                </div>
-              </div>
-            </div>
+            <img
+              src={searchDashboardImage}
+              alt="Creator search dashboard preview"
+              className="w-full rounded-lg shadow-xl"
+            />
           </div>
         </div>
       </div>
     </section>
   );
 }
+

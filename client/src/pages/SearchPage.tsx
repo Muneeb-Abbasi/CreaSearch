@@ -1,3 +1,4 @@
+import { useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CreatorCard } from "@/components/CreatorCard";
@@ -7,6 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 import creatorImage1 from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
@@ -80,13 +89,116 @@ const mockCreators = [
     followerCount: 180000,
     tags: ["Food", "Cooking", "YouTube", "Instagram"],
   },
+  {
+    id: "7",
+    name: "Hassan Javed",
+    title: "Travel Vlogger & Photographer",
+    location: "Karachi, Pakistan",
+    imageUrl: creatorImage2,
+    score: 82,
+    verified: true,
+    followerCount: 220000,
+    tags: ["Travel", "Photography", "YouTube", "Adventure"],
+  },
+  {
+    id: "8",
+    name: "Zara Ahmed",
+    title: "Fashion & Beauty Influencer",
+    location: "Lahore, Pakistan",
+    imageUrl: creatorImage1,
+    score: 89,
+    verified: true,
+    followerCount: 450000,
+    tags: ["Fashion", "Beauty", "Instagram", "Lifestyle"],
+  },
+  {
+    id: "9",
+    name: "Imran Siddiqui",
+    title: "Fitness Coach & Motivator",
+    location: "Islamabad, Pakistan",
+    imageUrl: creatorImage3,
+    score: 84,
+    verified: true,
+    followerCount: 175000,
+    tags: ["Fitness", "Health", "YouTube", "Training"],
+  },
+  {
+    id: "10",
+    name: "Mehwish Khan",
+    title: "Education Content Creator",
+    location: "Karachi, Pakistan",
+    imageUrl: creatorImage1,
+    score: 90,
+    verified: true,
+    followerCount: 320000,
+    tags: ["Education", "Learning", "YouTube", "Courses"],
+  },
+  {
+    id: "11",
+    name: "Ali Haider",
+    title: "Gaming & Esports Streamer",
+    location: "Lahore, Pakistan",
+    imageUrl: creatorImage2,
+    score: 77,
+    verified: true,
+    followerCount: 198000,
+    tags: ["Gaming", "Esports", "YouTube", "Streaming"],
+  },
+  {
+    id: "12",
+    name: "Nadia Hussain",
+    title: "Parenting & Family Blogger",
+    location: "Islamabad, Pakistan",
+    imageUrl: creatorImage1,
+    score: 81,
+    verified: true,
+    followerCount: 145000,
+    tags: ["Parenting", "Family", "Lifestyle", "Instagram"],
+  },
+  {
+    id: "13",
+    name: "Kamran Shah",
+    title: "Finance & Investment Advisor",
+    location: "Karachi, Pakistan",
+    imageUrl: creatorImage3,
+    score: 93,
+    verified: true,
+    followerCount: 280000,
+    tags: ["Finance", "Investment", "YouTube", "Business"],
+  },
+  {
+    id: "14",
+    name: "Sana Tariq",
+    title: "Art & Design Creator",
+    location: "Lahore, Pakistan",
+    imageUrl: creatorImage1,
+    score: 75,
+    verified: true,
+    followerCount: 98000,
+    tags: ["Art", "Design", "Instagram", "Creative"],
+  },
+  {
+    id: "15",
+    name: "Faisal Malik",
+    title: "Tech Reviewer & Unboxer",
+    location: "Islamabad, Pakistan",
+    imageUrl: creatorImage2,
+    score: 86,
+    verified: true,
+    followerCount: 410000,
+    tags: ["Tech", "Reviews", "YouTube", "Gadgets"],
+  },
 ];
 
 export default function SearchPage() {
+  const [, navigate] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [followerRange, setFollowerRange] = useState([0]);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const creatorsPerPage = 6;
 
   const collaborationTypes = [
     "Video Content",
@@ -101,6 +213,44 @@ export default function SearchPage() {
     "Islamabad",
     "Rawalpindi",
   ];
+
+  // Filter creators based on search, city, follower count, and collaboration type
+  const filteredCreators = mockCreators.filter((creator) => {
+    // Search query filter
+    if (searchQuery && !creator.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      !creator.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+
+    // City filter
+    if (selectedCities.length > 0 && !selectedCities.some(city => creator.location.includes(city))) {
+      return false;
+    }
+
+    // Follower range filter (slider value is in K, e.g., 100 = 100K = 100,000)
+    if (followerRange[0] > 0 && creator.followerCount < followerRange[0] * 1000) {
+      return false;
+    }
+
+    // Collaboration type filter
+    if (selectedTypes.length > 0 && !selectedTypes.some(type =>
+      creator.tags.some(tag => tag.toLowerCase().includes(type.toLowerCase().split(' ')[0]))
+    )) {
+      return false;
+    }
+
+    return true;
+  });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredCreators.length / creatorsPerPage);
+  const startIndex = (currentPage - 1) * creatorsPerPage;
+  const displayedCreators = filteredCreators.slice(startIndex, startIndex + creatorsPerPage);
+
+  // Reset to page 1 when filters change
+  const handleFilterChange = () => {
+    setCurrentPage(1);
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -191,7 +341,19 @@ export default function SearchPage() {
                   <div className="space-y-3">
                     {cities.map((city) => (
                       <div key={city} className="flex items-center gap-2">
-                        <Checkbox id={city} data-testid={`checkbox-${city}`} />
+                        <Checkbox
+                          id={city}
+                          checked={selectedCities.includes(city)}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedCities([...selectedCities, city]);
+                            } else {
+                              setSelectedCities(selectedCities.filter(c => c !== city));
+                            }
+                            handleFilterChange();
+                          }}
+                          data-testid={`checkbox-${city}`}
+                        />
                         <label
                           htmlFor={city}
                           className="text-sm cursor-pointer"
@@ -205,18 +367,21 @@ export default function SearchPage() {
 
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">
-                    Follower Range
+                    Min Followers
                   </Label>
                   <Slider
                     value={followerRange}
-                    onValueChange={setFollowerRange}
-                    max={500000}
-                    step={10000}
+                    onValueChange={(value) => {
+                      setFollowerRange(value);
+                      handleFilterChange();
+                    }}
+                    max={500}
+                    step={10}
                     className="mb-2"
                     data-testid="slider-followers"
                   />
                   <div className="text-xs text-muted-foreground">
-                    Up to {followerRange[0].toLocaleString()} followers
+                    {followerRange[0] > 0 ? `${followerRange[0]}K+ followers` : 'Any followers'}
                   </div>
                 </div>
 
@@ -229,19 +394,63 @@ export default function SearchPage() {
             <div className="flex-1">
               <div className="mb-6 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Showing {mockCreators.length} creators
+                  Showing {startIndex + 1}-{Math.min(startIndex + creatorsPerPage, mockCreators.length)} of {mockCreators.length} creators
                 </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {mockCreators.map((creator) => (
+                {displayedCreators.map((creator) => (
                   <CreatorCard
                     key={creator.id}
                     {...creator}
-                    onClick={() => console.log(`Clicked creator ${creator.id}`)}
+                    onClick={() => navigate(`/creator/${creator.id}`)}
                   />
                 ))}
               </div>
+
+              {totalPages > 1 && (
+                <div className="mt-8">
+                  <Pagination>
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage > 1) setCurrentPage(currentPage - 1);
+                          }}
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            isActive={currentPage === page}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(page);
+                            }}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                          }}
+                          className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
             </div>
           </div>
         </div>

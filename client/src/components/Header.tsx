@@ -1,11 +1,29 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./ThemeToggle";
-import { Search, Menu } from "lucide-react";
+import { Search, Menu, User, LogOut } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, signOut, loading } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Sign out failed:", error);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -21,12 +39,12 @@ export function Header() {
             <Link href="/search" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-search">
               Find Creators
             </Link>
-            <Link href="/how-it-works" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-how-it-works">
+            <a href="/#how-it-works" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-how-it-works">
               How It Works
-            </Link>
-            <Link href="/pricing" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-pricing">
+            </a>
+            <a href="/#pricing" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-pricing">
               Pricing
-            </Link>
+            </a>
           </nav>
 
           <div className="flex items-center gap-2">
@@ -34,12 +52,55 @@ export function Header() {
               <Search className="h-5 w-5" />
             </Button>
             <ThemeToggle />
-            <Button variant="ghost" className="hidden md:inline-flex hover-elevate active-elevate-2" data-testid="button-login">
-              Log In
-            </Button>
-            <Button className="hidden md:inline-flex" data-testid="button-signup">
-              Sign Up
-            </Button>
+
+            {!loading && user ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-9 w-9 rounded-full" data-testid="button-user-menu">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={user.user_metadata?.avatar_url} alt={user.user_metadata?.name || "User"} />
+                      <AvatarFallback>
+                        {user.user_metadata?.name?.charAt(0) || user.email?.charAt(0) || "U"}
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="flex items-center justify-start gap-2 p-2">
+                    <div className="flex flex-col space-y-1 leading-none">
+                      <p className="font-medium">{user.user_metadata?.name || "User"}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/create-profile" className="cursor-pointer">
+                      <User className="mr-2 h-4 w-4" />
+                      My Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost" className="hidden md:inline-flex hover-elevate active-elevate-2" data-testid="button-login">
+                    Log In
+                  </Button>
+                </Link>
+                <Link href="/login">
+                  <Button className="hidden md:inline-flex" data-testid="button-signup">
+                    Sign Up
+                  </Button>
+                </Link>
+              </>
+            )}
+
             <Button
               variant="ghost"
               size="icon"
@@ -58,19 +119,40 @@ export function Header() {
               <Link href="/search" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-search">
                 Find Creators
               </Link>
-              <Link href="/how-it-works" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-how-it-works">
+              <a href="/#how-it-works" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-how-it-works">
                 How It Works
-              </Link>
-              <Link href="/pricing" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-pricing">
+              </a>
+              <a href="/#pricing" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-pricing">
                 Pricing
-              </Link>
+              </a>
               <div className="flex flex-col gap-2 pt-2">
-                <Button variant="ghost" className="w-full justify-start" data-testid="button-mobile-login">
-                  Log In
-                </Button>
-                <Button className="w-full" data-testid="button-mobile-signup">
-                  Sign Up
-                </Button>
+                {user ? (
+                  <>
+                    <Link href="/create-profile">
+                      <Button variant="ghost" className="w-full justify-start">
+                        <User className="mr-2 h-4 w-4" />
+                        My Profile
+                      </Button>
+                    </Link>
+                    <Button variant="ghost" className="w-full justify-start text-destructive" onClick={handleSignOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/login">
+                      <Button variant="ghost" className="w-full justify-start" data-testid="button-mobile-login">
+                        Log In
+                      </Button>
+                    </Link>
+                    <Link href="/login">
+                      <Button className="w-full" data-testid="button-mobile-signup">
+                        Sign Up
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </nav>
           </div>
@@ -79,3 +161,4 @@ export function Header() {
     </header>
   );
 }
+

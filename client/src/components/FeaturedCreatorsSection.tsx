@@ -1,3 +1,4 @@
+import { Link, useLocation } from "wouter";
 import { CreatorCard } from "./CreatorCard";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
@@ -42,6 +43,8 @@ const featuredCreators = [
 ];
 
 export function FeaturedCreatorsSection() {
+  const [, navigate] = useLocation();
+
   return (
     <section className="w-full py-16 md:py-24 bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 md:px-8">
@@ -54,10 +57,12 @@ export function FeaturedCreatorsSection() {
               Discover top-rated creators ready to collaborate
             </p>
           </div>
-          <Button variant="ghost" className="hidden md:flex" data-testid="button-view-all">
-            View All
-            <ArrowRight className="ml-2 w-4 h-4" />
-          </Button>
+          <Link href="/search">
+            <Button variant="ghost" className="hidden md:flex" data-testid="button-view-all">
+              View All
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -65,18 +70,21 @@ export function FeaturedCreatorsSection() {
             <CreatorCard
               key={creator.id}
               {...creator}
-              onClick={() => console.log(`Clicked creator ${creator.id}`)}
+              onClick={() => navigate(`/creator/${creator.id}`)}
             />
           ))}
         </div>
 
         <div className="flex justify-center mt-12 md:hidden">
-          <Button variant="ghost" data-testid="button-view-all-mobile">
-            View All Creators
-            <ArrowRight className="ml-2 w-4 h-4" />
-          </Button>
+          <Link href="/search">
+            <Button variant="ghost" data-testid="button-view-all-mobile">
+              View All Creators
+              <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
         </div>
       </div>
     </section>
   );
 }
+

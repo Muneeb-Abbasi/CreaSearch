@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import heroImage from "@assets/generated_images/Pakistani_creators_collaborating_in_studio_908e3a51.png";
@@ -23,26 +24,31 @@ export function HeroSection() {
             Find verified content creators, speakers, and trainers for your next video project, podcast, or event.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              size="lg"
-              variant="default"
-              className="text-base bg-primary/90 backdrop-blur-sm border border-primary-border hover:bg-primary"
-              data-testid="button-find-creators"
-            >
-              Find Creators
-              <ArrowRight className="ml-2 w-5 h-5" />
-            </Button>
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-base bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white/20"
-              data-testid="button-join-creator"
-            >
-              Join as Creator
-            </Button>
+            <Link href="/search">
+              <Button
+                size="lg"
+                variant="default"
+                className="text-base bg-primary/90 backdrop-blur-sm border border-primary-border hover:bg-primary"
+                data-testid="button-find-creators"
+              >
+                Find Creators
+                <ArrowRight className="ml-2 w-5 h-5" />
+              </Button>
+            </Link>
+            <Link href="/login">
+              <Button
+                size="lg"
+                variant="outline"
+                className="text-base bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white/20"
+                data-testid="button-join-creator"
+              >
+                Join as Creator
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
     </section>
   );
 }
+
