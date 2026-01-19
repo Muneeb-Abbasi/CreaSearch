@@ -82,7 +82,8 @@ GET  http://localhost:5000/api/auth/me
 
 ---
 
-## Known Issues / Not Yet Implemented
+## Known Issues / Bugs 🐛
+- [x] ~~**"Clear All Filters" button not working**~~ ✅ FIXED
 - [ ] Profile creation form not connected to API
 - [ ] Search page uses mock data (API ready but no DB data)
 - [ ] File uploads not implemented

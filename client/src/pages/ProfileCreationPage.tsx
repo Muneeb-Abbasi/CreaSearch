@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,12 +10,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, CheckCircle2 } from "lucide-react";
+import { Upload, CheckCircle2, Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { profileApi } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProfileCreationPage() {
+  const { user, loading: authLoading } = useAuth();
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+
   const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const totalSteps = 4;
   const progress = (currentStep / totalSteps) * 100;
+
+  // Form state
+  const [formData, setFormData] = useState({
+    name: "",
+    title: "",
+    location: "",
+    bio: "",
+    collaborationTypes: [] as string[],
+    videoIntroUrl: "",
+    youtube: "",
+    instagram: "",
+    linkedin: "",
+    twitter: "",
+    agreedToTerms: false,
+  });
 
   const steps = [
     "Basic Info",
@@ -22,6 +46,103 @@ export default function ProfileCreationPage() {
     "Social Links",
     "Review & Submit"
   ];
+
+  // Redirect if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/login");
+    }
+  }, [user, authLoading, navigate]);
+
+  // Prefill name from Google profile
+  useEffect(() => {
+    if (user?.user_metadata?.name && !formData.name) {
+      setFormData(prev => ({ ...prev, name: user.user_metadata.name }));
+    }
+  }, [user]);
+
+  const handleCollaborationTypeChange = (type: string, checked: boolean) => {
+    if (checked) {
+      setFormData(prev => ({
+        ...prev,
+        collaborationTypes: [...prev.collaborationTypes, type]
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        collaborationTypes: prev.collaborationTypes.filter(t => t !== type)
+      }));
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.agreedToTerms) {
+      toast({
+        title: "Please agree to terms",
+        description: "You must agree to the Terms of Service and Privacy Policy",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const socialLinks: Record<string, string> = {};
+      if (formData.youtube) socialLinks.youtube = formData.youtube;
+      if (formData.instagram) socialLinks.instagram = formData.instagram;
+      if (formData.linkedin) socialLinks.linkedin = formData.linkedin;
+      if (formData.twitter) socialLinks.twitter = formData.twitter;
+
+      await profileApi.create({
+        user_id: user?.id,
+        name: formData.name,
+        title: formData.title,
+        location: formData.location,
+        bio: formData.bio,
+        collaboration_types: formData.collaborationTypes,
+        video_intro_url: formData.videoIntroUrl || null,
+        social_links: socialLinks,
+        role: 'creator',
+        status: 'pending',
+        profile_completion: calculateCompletion(),
+      });
+
+      toast({
+        title: "Profile submitted!",
+        description: "Your profile is pending review. We'll notify you once approved.",
+      });
+
+      navigate("/");
+    } catch (error) {
+      console.error("Error creating profile:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create profile. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const calculateCompletion = () => {
+    let score = 0;
+    if (formData.name) score += 20;
+    if (formData.title) score += 15;
+    if (formData.location) score += 10;
+    if (formData.bio) score += 20;
+    if (formData.collaborationTypes.length > 0) score += 15;
+    if (formData.youtube || formData.instagram || formData.linkedin || formData.twitter) score += 20;
+    return score;
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -62,17 +183,35 @@ export default function ProfileCreationPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label htmlFor="full-name">Full Name *</Label>
-                    <Input id="full-name" placeholder="Your full name" data-testid="input-name" />
+                    <Input
+                      id="full-name"
+                      placeholder="Your full name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      data-testid="input-name"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="title">Professional Title *</Label>
-                    <Input id="title" placeholder="e.g., Tech Content Creator" data-testid="input-title" />
+                    <Input
+                      id="title"
+                      placeholder="e.g., Tech Content Creator"
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      data-testid="input-title"
+                    />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label htmlFor="location">Location *</Label>
-                  <Input id="location" placeholder="City, Pakistan" data-testid="input-location" />
+                  <Input
+                    id="location"
+                    placeholder="City, Pakistan"
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    data-testid="input-location"
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -81,6 +220,8 @@ export default function ProfileCreationPage() {
                     id="bio"
                     placeholder="Tell us about your experience and what makes you unique..."
                     rows={6}
+                    value={formData.bio}
+                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                     data-testid="textarea-bio"
                   />
                 </div>
@@ -90,7 +231,12 @@ export default function ProfileCreationPage() {
                   <div className="space-y-3">
                     {["Video Content", "Podcasts", "Events/Speaking", "Training Sessions"].map((type) => (
                       <div key={type} className="flex items-center gap-2">
-                        <Checkbox id={type} data-testid={`checkbox-${type}`} />
+                        <Checkbox
+                          id={type}
+                          checked={formData.collaborationTypes.includes(type)}
+                          onCheckedChange={(checked) => handleCollaborationTypeChange(type, checked as boolean)}
+                          data-testid={`checkbox-${type}`}
+                        />
                         <label htmlFor={type} className="text-sm cursor-pointer">
                           {type}
                         </label>
@@ -117,23 +263,24 @@ export default function ProfileCreationPage() {
                     <Upload className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
                     <p className="text-sm font-medium">Click to upload or drag and drop</p>
                     <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                    <p className="text-xs text-yellow-600 mt-2">(File upload coming soon - profile will be created without photo)</p>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Video Introduction (30-50 seconds) *</Label>
+                  <Label>Video Introduction (30-50 seconds)</Label>
                   <p className="text-sm text-muted-foreground mb-3">
                     Introduce yourself and your work in a short video
                   </p>
-                  <div className="border-2 border-dashed rounded-md p-8 text-center hover-elevate cursor-pointer">
-                    <Upload className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-sm font-medium">Click to upload video</p>
-                    <p className="text-xs text-muted-foreground mt-1">MP4, MOV up to 50MB</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Or paste a YouTube/Vimeo link
+                  <p className="text-sm text-muted-foreground">
+                    Paste a YouTube/Vimeo link:
                   </p>
-                  <Input placeholder="https://youtube.com/..." data-testid="input-video-url" />
+                  <Input
+                    placeholder="https://youtube.com/..."
+                    value={formData.videoIntroUrl}
+                    onChange={(e) => setFormData({ ...formData, videoIntroUrl: e.target.value })}
+                    data-testid="input-video-url"
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -146,7 +293,7 @@ export default function ProfileCreationPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <p className="text-sm text-muted-foreground">
-                  Add at least two social media handles for verification
+                  Add at least one social media handle for verification
                 </p>
 
                 <div className="space-y-4">
@@ -155,6 +302,8 @@ export default function ProfileCreationPage() {
                     <Input
                       id="youtube"
                       placeholder="https://youtube.com/@username"
+                      value={formData.youtube}
+                      onChange={(e) => setFormData({ ...formData, youtube: e.target.value })}
                       data-testid="input-youtube"
                     />
                   </div>
@@ -164,6 +313,8 @@ export default function ProfileCreationPage() {
                     <Input
                       id="instagram"
                       placeholder="https://instagram.com/username"
+                      value={formData.instagram}
+                      onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
                       data-testid="input-instagram"
                     />
                   </div>
@@ -173,6 +324,8 @@ export default function ProfileCreationPage() {
                     <Input
                       id="linkedin"
                       placeholder="https://linkedin.com/in/username"
+                      value={formData.linkedin}
+                      onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
                       data-testid="input-linkedin"
                     />
                   </div>
@@ -182,6 +335,8 @@ export default function ProfileCreationPage() {
                     <Input
                       id="twitter"
                       placeholder="https://twitter.com/username"
+                      value={formData.twitter}
+                      onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
                       data-testid="input-twitter"
                     />
                   </div>
@@ -189,7 +344,7 @@ export default function ProfileCreationPage() {
 
                 <div className="p-4 bg-muted rounded-md">
                   <p className="text-sm">
-                    <strong>Note:</strong> We'll automatically fetch your follower counts from 
+                    <strong>Note:</strong> We'll automatically fetch your follower counts from
                     connected social media accounts for your Creasearch Score calculation.
                   </p>
                 </div>
@@ -214,26 +369,43 @@ export default function ProfileCreationPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted rounded-md">
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Name</p>
-                      <p className="font-medium">Your Name Here</p>
+                      <p className="font-medium">{formData.name || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Title</p>
-                      <p className="font-medium">Your Title Here</p>
+                      <p className="font-medium">{formData.title || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Location</p>
-                      <p className="font-medium">City, Pakistan</p>
+                      <p className="font-medium">{formData.location || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Collaboration Types</p>
-                      <p className="font-medium">Video, Podcasts</p>
+                      <p className="font-medium">
+                        {formData.collaborationTypes.length > 0
+                          ? formData.collaborationTypes.join(", ")
+                          : "None selected"}
+                      </p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-muted-foreground mb-1">About</p>
+                      <p className="font-medium text-sm">{formData.bio || "Not provided"}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-muted-foreground mb-1">Profile Completion</p>
+                      <p className="font-medium">{calculateCompletion()}%</p>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-2 p-4 border rounded-md">
-                    <Checkbox id="terms" data-testid="checkbox-terms" />
+                    <Checkbox
+                      id="terms"
+                      checked={formData.agreedToTerms}
+                      onCheckedChange={(checked) => setFormData({ ...formData, agreedToTerms: checked as boolean })}
+                      data-testid="checkbox-terms"
+                    />
                     <label htmlFor="terms" className="text-sm cursor-pointer">
-                      I confirm that all information provided is accurate and I agree to 
+                      I confirm that all information provided is accurate and I agree to
                       Creasearch's Terms of Service and Privacy Policy
                     </label>
                   </div>
@@ -256,12 +428,22 @@ export default function ProfileCreationPage() {
                 if (currentStep < totalSteps) {
                   setCurrentStep(currentStep + 1);
                 } else {
-                  console.log("Profile submitted");
+                  handleSubmit();
                 }
               }}
+              disabled={isSubmitting}
               data-testid="button-next"
             >
-              {currentStep === totalSteps ? "Submit for Review" : "Next"}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Submitting...
+                </>
+              ) : currentStep === totalSteps ? (
+                "Submit for Review"
+              ) : (
+                "Next"
+              )}
             </Button>
           </div>
         </div>

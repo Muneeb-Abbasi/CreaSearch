@@ -385,7 +385,18 @@ export default function SearchPage() {
                   </div>
                 </div>
 
-                <Button variant="outline" className="w-full" data-testid="button-clear-filters">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  data-testid="button-clear-filters"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setSelectedTypes([]);
+                    setSelectedCities([]);
+                    setFollowerRange([0]);
+                    setCurrentPage(1);
+                  }}
+                >
                   Clear All Filters
                 </Button>
               </div>

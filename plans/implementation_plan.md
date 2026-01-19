@@ -204,10 +204,22 @@ CREATE POLICY "Users manage own profile" ON profiles
 
 ### Phase 4: Connect Frontend to API (Partial)
 - [x] Create API service layer (api.ts)
+- [x] ProfileCreationPage → POST /api/profiles
 - [ ] SearchPage → GET /api/profiles
 - [ ] CreatorProfilePage → GET /api/profiles/:id
-- [ ] ProfileCreationPage → POST/PUT /api/profiles
 - [ ] AdminDashboardPage → admin endpoints
+
+#### 🆕 Profile Status Check (UX Fix)
+**Problem:** After submitting profile, users can revisit /create-profile and see empty form.
+
+**Solution:**
+1. Add API endpoint `GET /api/profiles/me` to fetch current user's profile
+2. On ProfileCreationPage load:
+   - Fetch user's existing profile
+   - If **pending**: Show "Profile Under Review" status page
+   - If **approved**: Redirect to `/creator/:id` (their profile)
+   - If **rejected**: Allow editing and resubmission
+   - If **none**: Show profile creation form
 
 ### Phase 5: File Uploads
 - [ ] Profile photo upload to Supabase Storage
