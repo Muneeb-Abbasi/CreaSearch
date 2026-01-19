@@ -217,12 +217,18 @@ CREATE POLICY "Users manage own profile" ON profiles
 - [x] Upload API endpoints (POST /api/upload/photo, POST /api/upload/video)
 - [x] Frontend uploadApi functions
 
-### Phase 6: Email (Resend)
+### Phase 6: Admin Security & Profile Enhancements 🆕
+- [ ] **Add follower count input** to ProfileCreationPage form
+- [ ] **Admin Dashboard security** - only allow users with role='admin'
+- [ ] **Admin "All Profiles" tab** - view/delete approved profiles
+- [ ] **Backend auth middleware** - protect admin endpoints
+
+### Phase 7: Email (Resend)
 - [ ] Configure Resend
 - [ ] Inquiry notification emails
 - [ ] Profile approved/rejected emails
 
-### Phase 7: Deployment
+### Phase 8: Deployment
 - [ ] Deploy to Vercel
 - [ ] Configure environment variables
 - [ ] Connect custom domain (creasearch.com)

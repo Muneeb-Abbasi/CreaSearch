@@ -33,6 +33,7 @@ export default function ProfileCreationPage() {
     title: "",
     location: "",
     bio: "",
+    followerCount: "",
     collaborationTypes: [] as string[],
     videoIntroUrl: "",
     youtube: "",
@@ -116,6 +117,7 @@ export default function ProfileCreationPage() {
         title: formData.title,
         location: formData.location,
         bio: formData.bio,
+        follower_total: formData.followerCount ? parseInt(formData.followerCount) : 0,
         collaboration_types: formData.collaborationTypes,
         video_intro_url: formData.videoIntroUrl || null,
         social_links: socialLinks,
@@ -318,6 +320,19 @@ export default function ProfileCreationPage() {
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     data-testid="input-location"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="followerCount">Total Followers/Subscribers</Label>
+                  <Input
+                    id="followerCount"
+                    type="number"
+                    placeholder="e.g., 50000"
+                    value={formData.followerCount}
+                    onChange={(e) => setFormData({ ...formData, followerCount: e.target.value })}
+                    data-testid="input-follower-count"
+                  />
+                  <p className="text-xs text-muted-foreground">Combined followers across all your platforms</p>
                 </div>
 
                 <div className="space-y-2">

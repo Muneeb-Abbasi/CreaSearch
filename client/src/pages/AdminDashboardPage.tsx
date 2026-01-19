@@ -17,8 +17,41 @@ export default function AdminDashboardPage() {
   const { toast } = useToast();
 
   const [pendingProfiles, setPendingProfiles] = useState<Profile[]>([]);
+  const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null);
+
+  // Check if current user is admin
+  useEffect(() => {
+    async function checkAdminStatus() {
+      if (!user?.id) return;
+      try {
+        const profile = await profileApi.getMyProfile(user.id);
+        setCurrentUserProfile(profile);
+        setIsAdmin(profile?.role === 'admin');
+      } catch (error) {
+        console.error("Error checking admin status:", error);
+        setIsAdmin(false);
+      }
+    }
+    if (!authLoading && user) {
+      checkAdminStatus();
+    }
+  }, [user, authLoading]);
+
+  // Redirect if not admin
+  useEffect(() => {
+    if (isAdmin === false) {
+      toast({
+        title: "Access Denied",
+        description: "You don't have admin privileges.",
+        variant: "destructive"
+      });
+      navigate("/");
+    }
+  }, [isAdmin, navigate, toast]);
 
   // Fetch pending profiles
   const fetchPendingProfiles = async () => {
@@ -38,11 +71,22 @@ export default function AdminDashboardPage() {
     }
   };
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchPendingProfiles();
+  // Fetch all approved profiles
+  const fetchAllProfiles = async () => {
+    try {
+      const profiles = await profileApi.getAll();
+      setAllProfiles(profiles);
+    } catch (error) {
+      console.error("Error fetching all profiles:", error);
     }
-  }, [user, authLoading]);
+  };
+
+  useEffect(() => {
+    if (!authLoading && user && isAdmin) {
+      fetchPendingProfiles();
+      fetchAllProfiles();
+    }
+  }, [user, authLoading, isAdmin]);
 
   // Redirect if not logged in
   useEffect(() => {
@@ -105,6 +149,7 @@ export default function AdminDashboardPage() {
         description: "The profile has been permanently deleted."
       });
       setPendingProfiles(prev => prev.filter(p => p.id !== profileId));
+      setAllProfiles(prev => prev.filter(p => p.id !== profileId));
     } catch (error) {
       console.error("Error deleting profile:", error);
       toast({
@@ -236,7 +281,7 @@ export default function AdminDashboardPage() {
                   <Badge variant="secondary" className="ml-2">{pendingProfiles.length}</Badge>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="users">User Management</TabsTrigger>
+              <TabsTrigger value="users">All Profiles</TabsTrigger>
               <TabsTrigger value="reports">Reports</TabsTrigger>
             </TabsList>
 
@@ -335,10 +380,55 @@ export default function AdminDashboardPage() {
             <TabsContent value="users" className="mt-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>User Management</CardTitle>
+                  <CardTitle>All Approved Profiles ({allProfiles.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-muted-foreground">User management interface will be displayed here.</p>
+                  {allProfiles.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">No approved profiles yet.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {allProfiles.map((profile) => (
+                        <div
+                          key={profile.id}
+                          className="flex items-center justify-between p-4 border rounded-md"
+                          data-testid={`all-profile-${profile.id}`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <Avatar className="w-12 h-12">
+                              <AvatarImage src={profile.avatar_url || undefined} alt={profile.name} />
+                              <AvatarFallback>{profile.name.charAt(0)}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <h4 className="font-semibold">{profile.name}</h4>
+                              <p className="text-sm text-muted-foreground">
+                                {profile.title || "Creator"} • {profile.location || "Pakistan"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {(profile.follower_total || 0).toLocaleString()} followers
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default" className="bg-green-500">Approved</Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(profile.id)}
+                              disabled={actionLoading === profile.id}
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            >
+                              {actionLoading === profile.id ? (
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4 mr-1" />
+                              )}
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>
