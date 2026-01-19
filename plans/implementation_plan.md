@@ -206,14 +206,16 @@ CREATE POLICY "Users manage own profile" ON profiles
 - [x] Create API service layer (api.ts)
 - [x] ProfileCreationPage → POST /api/profiles
 - [x] Profile Status Check (GET /api/profiles/me) - shows pending/approved/rejected
-- [x] AdminDashboardPage → approve/reject profiles
+- [x] AdminDashboardPage → approve/reject/delete profiles
 - [x] SearchPage → GET /api/profiles (with mock data fallback)
 - [x] CreatorProfilePage → GET /api/profiles/:id
 
-### Phase 5: File Uploads
-- [ ] Profile photo upload to Supabase Storage
-- [ ] Video intro upload or YouTube URL
-- [ ] Display media in profiles
+### Phase 5: File Uploads ✅ COMPLETE
+- [x] Profile photo upload to Supabase Storage
+- [x] Video intro upload to Supabase Storage
+- [x] Storage service (server/services/storage.ts)
+- [x] Upload API endpoints (POST /api/upload/photo, POST /api/upload/video)
+- [x] Frontend uploadApi functions
 
 ### Phase 6: Email (Resend)
 - [ ] Configure Resend

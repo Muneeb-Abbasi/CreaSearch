@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminApi, profileApi, Profile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +86,30 @@ export default function AdminDashboardPage() {
       toast({
         title: "Error",
         description: "Failed to reject profile",
+        variant: "destructive"
+      });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (profileId: string) => {
+    if (!confirm("Are you sure you want to permanently delete this profile?")) {
+      return;
+    }
+    setActionLoading(profileId);
+    try {
+      await adminApi.delete(profileId);
+      toast({
+        title: "Profile Deleted",
+        description: "The profile has been permanently deleted."
+      });
+      setPendingProfiles(prev => prev.filter(p => p.id !== profileId));
+    } catch (error) {
+      console.error("Error deleting profile:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete profile",
         variant: "destructive"
       });
     } finally {
@@ -283,6 +307,21 @@ export default function AdminDashboardPage() {
                                 <XCircle className="w-4 h-4 mr-1" />
                               )}
                               Reject
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(profile.id)}
+                              disabled={actionLoading === profile.id}
+                              data-testid="button-delete"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                            >
+                              {actionLoading === profile.id ? (
+                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4 mr-1" />
+                              )}
+                              Delete
                             </Button>
                           </div>
                         </div>

@@ -129,4 +129,57 @@ export const adminApi = {
             method: 'POST',
         });
     },
+
+    // Delete profile
+    async delete(id: string): Promise<void> {
+        await fetch(`${API_BASE}/admin/delete/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+export interface UploadResult {
+    success: boolean;
+    url: string;
+    path: string;
+}
+
+export const uploadApi = {
+    // Upload profile photo
+    async uploadPhoto(userId: string, file: File): Promise<UploadResult> {
+        const formData = new FormData();
+        formData.append('photo', file);
+        formData.append('user_id', userId);
+
+        const response = await fetch(`${API_BASE}/upload/photo`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+            throw new Error(error.error || 'Upload failed');
+        }
+
+        return response.json();
+    },
+
+    // Upload video intro
+    async uploadVideo(userId: string, file: File): Promise<UploadResult> {
+        const formData = new FormData();
+        formData.append('video', file);
+        formData.append('user_id', userId);
+
+        const response = await fetch(`${API_BASE}/upload/video`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+            throw new Error(error.error || 'Upload failed');
+        }
+
+        return response.json();
+    },
 };

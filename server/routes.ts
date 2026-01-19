@@ -1,6 +1,24 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import multer from "multer";
 import { profileService, ProfileFilters } from "./services/database";
+import { storageService } from "./services/storage";
+
+// Configure multer for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB max
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow images and videos
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images and videos are allowed'));
+    }
+  }
+});
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // ============= PROFILE ROUTES =============
@@ -131,12 +149,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/admin/delete/:id - Delete a profile (admin only)
+  app.delete("/api/admin/delete/:id", async (req: Request, res: Response) => {
+    try {
+      // TODO: Add admin auth check
+      await profileService.delete(req.params.id);
+      res.json({ success: true, message: "Profile deleted" });
+    } catch (error) {
+      console.error("Error deleting profile:", error);
+      res.status(500).json({ error: "Failed to delete profile" });
+    }
+  });
+
   // ============= AUTH ROUTES =============
 
   // GET /api/auth/me - Get current user (placeholder)
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     // TODO: Implement with Supabase Auth
     res.json({ user: null, message: "Auth not yet implemented" });
+  });
+
+  // ============= UPLOAD ROUTES =============
+
+  // POST /api/upload/photo - Upload profile photo
+  app.post("/api/upload/photo", upload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.user_id;
+      const file = req.file;
+
+      if (!userId) {
+        return res.status(400).json({ error: "user_id is required" });
+      }
+
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Upload to Supabase Storage
+      const result = await storageService.uploadProfilePhoto(
+        userId,
+        file.buffer,
+        file.originalname,
+        file.mimetype
+      );
+
+      res.json({
+        success: true,
+        url: result.url,
+        path: result.path
+      });
+    } catch (error) {
+      console.error("Error uploading photo:", error);
+      res.status(500).json({ error: "Failed to upload photo" });
+    }
+  });
+
+  // POST /api/upload/video - Upload video intro
+  app.post("/api/upload/video", upload.single('video'), async (req: Request, res: Response) => {
+    try {
+      const userId = req.body.user_id;
+      const file = req.file;
+
+      if (!userId) {
+        return res.status(400).json({ error: "user_id is required" });
+      }
+
+      if (!file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      // Upload to Supabase Storage
+      const result = await storageService.uploadVideoIntro(
+        userId,
+        file.buffer,
+        file.originalname,
+        file.mimetype
+      );
+
+      res.json({
+        success: true,
+        url: result.url,
+        path: result.path
+      });
+    } catch (error) {
+      console.error("Error uploading video:", error);
+      res.status(500).json({ error: "Failed to upload video" });
+    }
   });
 
   const httpServer = createServer(app);
