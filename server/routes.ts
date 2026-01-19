@@ -5,6 +5,25 @@ import { profileService, ProfileFilters } from "./services/database";
 export async function registerRoutes(app: Express): Promise<Server> {
   // ============= PROFILE ROUTES =============
 
+  // GET /api/profiles/me - Get current user's profile by user_id
+  app.get("/api/profiles/me", async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.user_id as string;
+      if (!userId) {
+        return res.status(400).json({ error: "user_id query parameter required" });
+      }
+
+      const profile = await profileService.getByUserId(userId);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found", exists: false });
+      }
+      res.json({ ...profile, exists: true });
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
   // GET /api/profiles - List all approved profiles with filters
   app.get("/api/profiles", async (req: Request, res: Response) => {
     try {

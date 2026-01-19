@@ -10,9 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, CheckCircle2, Loader2 } from "lucide-react";
+import { Upload, CheckCircle2, Loader2, Clock, XCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { profileApi } from "@/lib/api";
+import { profileApi, Profile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ProfileCreationPage() {
@@ -22,6 +22,8 @@ export default function ProfileCreationPage() {
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [existingProfile, setExistingProfile] = useState<Profile | null>(null);
   const totalSteps = 4;
   const progress = (currentStep / totalSteps) * 100;
 
@@ -53,6 +55,21 @@ export default function ProfileCreationPage() {
       navigate("/login");
     }
   }, [user, authLoading, navigate]);
+
+  // Check for existing profile
+  useEffect(() => {
+    async function checkExistingProfile() {
+      if (user?.id) {
+        setIsLoadingProfile(true);
+        const profile = await profileApi.getMyProfile(user.id);
+        setExistingProfile(profile);
+        setIsLoadingProfile(false);
+      }
+    }
+    if (!authLoading && user) {
+      checkExistingProfile();
+    }
+  }, [user, authLoading]);
 
   // Prefill name from Google profile
   useEffect(() => {
@@ -136,10 +153,99 @@ export default function ProfileCreationPage() {
     return score;
   };
 
-  if (authLoading) {
+  if (authLoading || isLoadingProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
+  // Profile exists - show appropriate status page
+  if (existingProfile) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 bg-muted/30">
+          <div className="max-w-2xl mx-auto px-4 md:px-8 py-16">
+            <Card className="text-center">
+              <CardHeader>
+                {existingProfile.status === 'pending' && (
+                  <>
+                    <Clock className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
+                    <CardTitle className="text-2xl">Profile Under Review</CardTitle>
+                  </>
+                )}
+                {existingProfile.status === 'approved' && (
+                  <>
+                    <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-500" />
+                    <CardTitle className="text-2xl">Profile Approved!</CardTitle>
+                  </>
+                )}
+                {existingProfile.status === 'rejected' && (
+                  <>
+                    <XCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
+                    <CardTitle className="text-2xl">Profile Needs Updates</CardTitle>
+                  </>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {existingProfile.status === 'pending' && (
+                  <>
+                    <p className="text-muted-foreground">
+                      Your creator profile is currently being reviewed by our team.
+                      You'll receive a notification once it's approved.
+                    </p>
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm font-medium">Profile: {existingProfile.name}</p>
+                      <p className="text-xs text-muted-foreground">Submitted on {new Date(existingProfile.created_at).toLocaleDateString()}</p>
+                    </div>
+                  </>
+                )}
+                {existingProfile.status === 'approved' && (
+                  <>
+                    <p className="text-muted-foreground">
+                      Congratulations! Your profile is now live and visible to organizations.
+                    </p>
+                    <Button onClick={() => navigate(`/creator/${existingProfile.id}`)}>
+                      View My Profile
+                    </Button>
+                  </>
+                )}
+                {existingProfile.status === 'rejected' && (
+                  <>
+                    <p className="text-muted-foreground">
+                      Your profile wasn't approved. Please update your information and resubmit.
+                    </p>
+                    <Button onClick={() => {
+                      // Pre-fill form with existing data for editing
+                      setFormData({
+                        name: existingProfile.name,
+                        title: existingProfile.title || "",
+                        location: existingProfile.location || "",
+                        bio: existingProfile.bio || "",
+                        collaborationTypes: existingProfile.collaboration_types || [],
+                        videoIntroUrl: existingProfile.video_intro_url || "",
+                        youtube: existingProfile.social_links?.youtube || "",
+                        instagram: existingProfile.social_links?.instagram || "",
+                        linkedin: existingProfile.social_links?.linkedin || "",
+                        twitter: existingProfile.social_links?.twitter || "",
+                        agreedToTerms: false,
+                      });
+                      setExistingProfile(null); // Clear to show form
+                    }}>
+                      Edit Profile
+                    </Button>
+                  </>
+                )}
+                <Button variant="outline" onClick={() => navigate("/")}>
+                  Back to Home
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }

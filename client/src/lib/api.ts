@@ -51,6 +51,23 @@ async function fetchWithError<T>(url: string, options?: RequestInit): Promise<T>
 }
 
 export const profileApi = {
+    // Get current user's profile
+    async getMyProfile(userId: string): Promise<Profile | null> {
+        try {
+            const response = await fetch(`${API_BASE}/profiles/me?user_id=${userId}`);
+            if (response.status === 404) {
+                return null;
+            }
+            if (!response.ok) {
+                throw new Error('Failed to fetch profile');
+            }
+            return response.json();
+        } catch (error) {
+            console.error('Error fetching my profile:', error);
+            return null;
+        }
+    },
+
     // Get all approved profiles with optional filters
     async getAll(filters: ProfileFilters = {}): Promise<Profile[]> {
         const params = new URLSearchParams();

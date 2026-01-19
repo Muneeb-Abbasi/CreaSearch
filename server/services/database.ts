@@ -97,7 +97,20 @@ export const profileService = {
             .eq('id', id)
             .single();
 
-        if (error) throw error;
+        if (error && error.code !== 'PGRST116') throw error;
+        return data;
+    },
+
+    async getByUserId(userId: string): Promise<Profile | null> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .single();
+
+        // PGRST116 = no rows returned, which is not an error for us
+        if (error && error.code !== 'PGRST116') throw error;
         return data;
     },
 
