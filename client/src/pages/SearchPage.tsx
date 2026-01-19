@@ -1,4 +1,5 @@
 import { useLocation } from "wouter";
+import { useState, useEffect } from "react";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CreatorCard } from "@/components/CreatorCard";
@@ -16,8 +17,8 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Search, X, SlidersHorizontal } from "lucide-react";
-import { useState } from "react";
+import { Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
+import { profileApi, Profile } from "@/lib/api";
 import creatorImage1 from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
 import creatorImage2 from "@assets/generated_images/Pakistani_male_creator_headshot_3c6570b2.png";
 import creatorImage3 from "@assets/generated_images/Pakistani_trainer_headshot_b66d573d.png";
@@ -198,7 +199,42 @@ export default function SearchPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [apiCreators, setApiCreators] = useState<any[]>([]);
   const creatorsPerPage = 6;
+
+  // Fetch profiles from API
+  useEffect(() => {
+    async function fetchProfiles() {
+      setIsLoading(true);
+      try {
+        const profiles = await profileApi.getAll();
+        // Transform API profiles to match component format
+        const transformed = profiles.map((profile: Profile, index: number) => ({
+          id: profile.id,
+          name: profile.name,
+          title: profile.title || "Creator",
+          location: profile.location || "Pakistan",
+          imageUrl: profile.avatar_url || [creatorImage1, creatorImage2, creatorImage3][index % 3],
+          score: profile.creasearch_score || 80,
+          verified: profile.verified_socials?.length > 0,
+          followerCount: profile.follower_total || 0,
+          tags: profile.collaboration_types || [],
+        }));
+        setApiCreators(transformed);
+      } catch (error) {
+        console.error("Error fetching profiles:", error);
+        // Fallback to mock data on error
+        setApiCreators([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchProfiles();
+  }, []);
+
+  // Use API creators if available, otherwise use mock data
+  const allCreators = apiCreators.length > 0 ? apiCreators : mockCreators;
 
   const collaborationTypes = [
     "Video Content",
@@ -215,7 +251,7 @@ export default function SearchPage() {
   ];
 
   // Filter creators based on search, city, follower count, and collaboration type
-  const filteredCreators = mockCreators.filter((creator) => {
+  const filteredCreators = allCreators.filter((creator) => {
     // Search query filter
     if (searchQuery && !creator.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
       !creator.title.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -405,7 +441,17 @@ export default function SearchPage() {
             <div className="flex-1">
               <div className="mb-6 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  Showing {startIndex + 1}-{Math.min(startIndex + creatorsPerPage, mockCreators.length)} of {mockCreators.length} creators
+                  {isLoading ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading creators...
+                    </span>
+                  ) : (
+                    <>
+                      Showing {filteredCreators.length > 0 ? startIndex + 1 : 0}-{Math.min(startIndex + creatorsPerPage, filteredCreators.length)} of {filteredCreators.length} creators
+                      {apiCreators.length === 0 && " (demo data)"}
+                    </>
+                  )}
                 </p>
               </div>
 
