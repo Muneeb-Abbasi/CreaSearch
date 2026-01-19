@@ -23,10 +23,24 @@ export default function AdminDashboardPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null);
 
+  // Hardcoded admin emails (can access admin dashboard)
+  const ADMIN_EMAILS = [
+    'muneeb.abbasi13@gmail.com',
+    'ceo@pakistanrecruitment.com'
+  ];
+
   // Check if current user is admin
   useEffect(() => {
     async function checkAdminStatus() {
       if (!user?.id) return;
+
+      // Check if email is in admin list first
+      if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+        setIsAdmin(true);
+        return;
+      }
+
+      // Otherwise check profile role
       try {
         const profile = await profileApi.getMyProfile(user.id);
         setCurrentUserProfile(profile);
@@ -352,21 +366,6 @@ export default function AdminDashboardPage() {
                                 <XCircle className="w-4 h-4 mr-1" />
                               )}
                               Reject
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDelete(profile.id)}
-                              disabled={actionLoading === profile.id}
-                              data-testid="button-delete"
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                            >
-                              {actionLoading === profile.id ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4 mr-1" />
-                              )}
-                              Delete
                             </Button>
                           </div>
                         </div>

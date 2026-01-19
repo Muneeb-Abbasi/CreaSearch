@@ -152,8 +152,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DELETE /api/admin/delete/:id - Delete a profile (admin only)
   app.delete("/api/admin/delete/:id", async (req: Request, res: Response) => {
     try {
+      const profileId = req.params.id;
+      console.log(`[DELETE] Attempting to delete profile: ${profileId}`);
+
       // TODO: Add admin auth check
-      await profileService.delete(req.params.id);
+      await profileService.delete(profileId);
+
+      console.log(`[DELETE] Successfully deleted profile: ${profileId}`);
       res.json({ success: true, message: "Profile deleted" });
     } catch (error) {
       console.error("Error deleting profile:", error);

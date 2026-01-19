@@ -141,12 +141,21 @@ export const profileService = {
 
     async delete(id: string): Promise<void> {
         const supabase = getSupabaseClient();
-        const { error } = await supabase
+        console.log(`[DB] Deleting profile with id: ${id}`);
+
+        const { data, error, count } = await supabase
             .from('profiles')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .select();
+
+        console.log(`[DB] Delete result - data:`, data, `error:`, error);
 
         if (error) throw error;
+
+        if (!data || data.length === 0) {
+            console.log(`[DB] Warning: No rows were deleted for id: ${id}`);
+        }
     },
 
     async getPending(): Promise<Profile[]> {

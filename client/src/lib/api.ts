@@ -132,9 +132,14 @@ export const adminApi = {
 
     // Delete profile
     async delete(id: string): Promise<void> {
-        await fetch(`${API_BASE}/admin/delete/${id}`, {
+        const response = await fetch(`${API_BASE}/admin/delete/${id}`, {
             method: 'DELETE',
         });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ error: 'Delete failed' }));
+            throw new Error(error.error || 'Failed to delete profile');
+        }
     },
 };
 

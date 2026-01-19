@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Upload, CheckCircle2, Loader2, Clock, XCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { profileApi, Profile } from "@/lib/api";
+import { profileApi, uploadApi, Profile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ProfileCreationPage() {
@@ -24,6 +24,9 @@ export default function ProfileCreationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [existingProfile, setExistingProfile] = useState<Profile | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const totalSteps = 4;
   const progress = (currentStep / totalSteps) * 100;
 
@@ -58,19 +61,37 @@ export default function ProfileCreationPage() {
   }, [user, authLoading, navigate]);
 
   // Check for existing profile
-  useEffect(() => {
-    async function checkExistingProfile() {
-      if (user?.id) {
-        setIsLoadingProfile(true);
+  const checkExistingProfile = async () => {
+    if (user?.id) {
+      setIsLoadingProfile(true);
+      try {
         const profile = await profileApi.getMyProfile(user.id);
         setExistingProfile(profile);
-        setIsLoadingProfile(false);
+      } catch (error) {
+        // Profile not found (was deleted)
+        setExistingProfile(null);
       }
+      setIsLoadingProfile(false);
     }
+  };
+
+  useEffect(() => {
     if (!authLoading && user) {
       checkExistingProfile();
     }
   }, [user, authLoading]);
+
+  // Re-fetch profile when page becomes visible (fixes stale cache after admin delete)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user?.id) {
+        checkExistingProfile();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [user]);
 
   // Prefill name from Google profile
   useEffect(() => {
@@ -93,6 +114,26 @@ export default function ProfileCreationPage() {
     }
   };
 
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: "Please select an image under 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      setPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setPhotoPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.agreedToTerms) {
       toast({
@@ -111,12 +152,32 @@ export default function ProfileCreationPage() {
       if (formData.linkedin) socialLinks.linkedin = formData.linkedin;
       if (formData.twitter) socialLinks.twitter = formData.twitter;
 
+      // Upload photo first if selected
+      let avatarUrl: string | null = null;
+      if (photoFile && user?.id) {
+        setIsUploadingPhoto(true);
+        try {
+          const uploadResult = await uploadApi.uploadPhoto(user.id, photoFile);
+          avatarUrl = uploadResult.url;
+        } catch (uploadError) {
+          console.error("Photo upload failed:", uploadError);
+          toast({
+            title: "Photo upload failed",
+            description: "Profile will be created without photo. You can add it later.",
+            variant: "destructive"
+          });
+        } finally {
+          setIsUploadingPhoto(false);
+        }
+      }
+
       await profileApi.create({
         user_id: user?.id,
         name: formData.name,
         title: formData.title,
         location: formData.location,
         bio: formData.bio,
+        avatar_url: avatarUrl,
         follower_total: formData.followerCount ? parseInt(formData.followerCount) : 0,
         collaboration_types: formData.collaborationTypes,
         video_intro_url: formData.videoIntroUrl || null,
@@ -376,16 +437,40 @@ export default function ProfileCreationPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Profile Photo *</Label>
+                  <Label>Profile Photo</Label>
                   <p className="text-sm text-muted-foreground mb-3">
                     Upload a clear, face-visible photo for verification
                   </p>
-                  <div className="border-2 border-dashed rounded-md p-8 text-center hover-elevate cursor-pointer">
-                    <Upload className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-sm font-medium">Click to upload or drag and drop</p>
-                    <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
-                    <p className="text-xs text-yellow-600 mt-2">(File upload coming soon - profile will be created without photo)</p>
-                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePhotoChange}
+                    className="hidden"
+                    id="photo-upload"
+                    data-testid="input-photo"
+                  />
+                  <label
+                    htmlFor="photo-upload"
+                    className="border-2 border-dashed rounded-md p-8 text-center hover:bg-muted/50 cursor-pointer block transition-colors"
+                  >
+                    {photoPreview ? (
+                      <div className="flex flex-col items-center">
+                        <img
+                          src={photoPreview}
+                          alt="Preview"
+                          className="w-32 h-32 rounded-full object-cover mb-3"
+                        />
+                        <p className="text-sm font-medium text-green-600">Photo selected!</p>
+                        <p className="text-xs text-muted-foreground mt-1">Click to change</p>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
+                        <p className="text-sm font-medium">Click to upload or drag and drop</p>
+                        <p className="text-xs text-muted-foreground mt-1">PNG, JPG up to 5MB</p>
+                      </>
+                    )}
+                  </label>
                 </div>
 
                 <div className="space-y-2">
