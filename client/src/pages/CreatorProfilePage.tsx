@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRoute } from "wouter";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ProfileHeader } from "@/components/ProfileHeader";
@@ -6,26 +7,78 @@ import { InquiryModal } from "@/components/InquiryModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Star } from "lucide-react";
+import { Calendar, Star, Loader2, AlertCircle } from "lucide-react";
+import { profileApi, Profile } from "@/lib/api";
 import creatorImage from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
 
 export default function CreatorProfilePage() {
+  const [, params] = useRoute("/creator/:id");
   const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchProfile() {
+      if (!params?.id) return;
+
+      setIsLoading(true);
+      setError(null);
+      try {
+        const data = await profileApi.getById(params.id);
+        setProfile(data);
+      } catch (err) {
+        console.error("Error fetching profile:", err);
+        setError("Profile not found or failed to load");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchProfile();
+  }, [params?.id]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <AlertCircle className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-2xl font-bold mb-2">Profile Not Found</h2>
+            <p className="text-muted-foreground">{error || "This creator profile doesn't exist."}</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="flex-1">
         <ProfileHeader
-          name="Ayesha Khan"
-          title="Tech Content Creator & Speaker"
-          location="Karachi, Pakistan"
-          avatarUrl={creatorImage}
-          score={85}
-          verified={true}
-          followerCount={250000}
-          completedGigs={47}
-          tags={["Tech", "Education", "YouTube", "Podcasts", "Public Speaking"]}
+          name={profile.name}
+          title={profile.title || "Creator"}
+          location={profile.location || "Pakistan"}
+          avatarUrl={profile.avatar_url || creatorImage}
+          score={profile.creasearch_score || 80}
+          verified={profile.verified_socials?.length > 0}
+          followerCount={profile.follower_total || 0}
+          completedGigs={profile.gigs_completed || 0}
+          tags={profile.collaboration_types || []}
         />
 
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
@@ -45,106 +98,93 @@ export default function CreatorProfilePage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <p className="text-foreground leading-relaxed">
-                        Hi! I'm Ayesha, a passionate tech content creator and speaker based in Karachi. 
-                        I specialize in making complex technology concepts accessible and engaging for 
-                        diverse audiences through YouTube videos, podcasts, and live events.
-                      </p>
-                      <p className="text-foreground leading-relaxed">
-                        With over 5 years of experience in content creation and public speaking, I've 
-                        collaborated with major tech brands, educational institutions, and startups to 
-                        deliver impactful content that resonates with audiences across Pakistan.
+                        {profile.bio || "No bio provided yet."}
                       </p>
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Video Introduction</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="aspect-video bg-muted rounded-md flex items-center justify-center">
-                        <p className="text-muted-foreground">Video Player</p>
-                      </div>
-                    </CardContent>
-                  </Card>
+                  {profile.video_intro_url && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Video Introduction</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {profile.video_intro_url.includes("youtube") ? (
+                          <div className="aspect-video">
+                            <iframe
+                              className="w-full h-full rounded-md"
+                              src={profile.video_intro_url.replace("watch?v=", "embed/")}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                              allowFullScreen
+                            />
+                          </div>
+                        ) : (
+                          <div className="aspect-video bg-muted rounded-md flex items-center justify-center">
+                            <a href={profile.video_intro_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                              Watch Video Introduction
+                            </a>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Collaboration Types</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="p-4 border rounded-md">
-                          <h4 className="font-semibold mb-2">Video Content</h4>
-                          <p className="text-sm text-muted-foreground">
-                            Product reviews, tutorials, brand collaborations
-                          </p>
+                  {profile.collaboration_types?.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Collaboration Types</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-4">
+                          {profile.collaboration_types.map((type, index) => (
+                            <div key={index} className="p-4 border rounded-md">
+                              <h4 className="font-semibold mb-2">{type}</h4>
+                              <p className="text-sm text-muted-foreground">
+                                Available for {type.toLowerCase()} collaborations
+                              </p>
+                            </div>
+                          ))}
                         </div>
-                        <div className="p-4 border rounded-md">
-                          <h4 className="font-semibold mb-2">Podcasts</h4>
-                          <p className="text-sm text-muted-foreground">
-                            Guest appearances, hosting, interviews
-                          </p>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {profile.social_links && Object.keys(profile.social_links).length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Social Media</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2">
+                          {Object.entries(profile.social_links).map(([platform, url]) => (
+                            <a
+                              key={platform}
+                              href={url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex"
+                            >
+                              <Badge variant="secondary" className="capitalize hover:bg-primary hover:text-primary-foreground cursor-pointer">
+                                {platform}
+                              </Badge>
+                            </a>
+                          ))}
                         </div>
-                        <div className="p-4 border rounded-md">
-                          <h4 className="font-semibold mb-2">Events</h4>
-                          <p className="text-sm text-muted-foreground">
-                            Keynote speaking, panel discussions, workshops
-                          </p>
-                        </div>
-                        <div className="p-4 border rounded-md">
-                          <h4 className="font-semibold mb-2">Training</h4>
-                          <p className="text-sm text-muted-foreground">
-                            Corporate training, educational workshops
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
+                      </CardContent>
+                    </Card>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="portfolio" className="space-y-6 mt-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {[1, 2, 3, 4].map((i) => (
-                      <Card key={i} className="overflow-hidden">
-                        <div className="aspect-video bg-muted"></div>
-                        <CardContent className="pt-4">
-                          <h4 className="font-semibold mb-2">Project Title {i}</h4>
-                          <p className="text-sm text-muted-foreground mb-3">
-                            Brief description of the collaboration and outcomes achieved.
-                          </p>
-                          <div className="flex gap-2">
-                            <Badge variant="secondary">Tech</Badge>
-                            <Badge variant="secondary">Video</Badge>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p>Portfolio items coming soon...</p>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="reviews" className="space-y-6 mt-6">
-                  {[1, 2, 3].map((i) => (
-                    <Card key={i}>
-                      <CardContent className="pt-6">
-                        <div className="flex items-start justify-between mb-4">
-                          <div>
-                            <h4 className="font-semibold">Tech Company {i}</h4>
-                            <p className="text-sm text-muted-foreground">2 months ago</p>
-                          </div>
-                          <div className="flex gap-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star key={star} className="w-4 h-4 fill-yellow-500 text-yellow-500" />
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-foreground">
-                          Outstanding collaboration! Ayesha delivered professional content that 
-                          exceeded our expectations. Highly recommended for tech-focused projects.
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
+                  <div className="text-center py-12 text-muted-foreground">
+                    <p>No reviews yet.</p>
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>
@@ -159,11 +199,11 @@ export default function CreatorProfilePage() {
                     <Calendar className="w-5 h-5 text-muted-foreground" />
                     <div>
                       <p className="font-medium">Available for projects</p>
-                      <p className="text-sm text-muted-foreground">Within 2 weeks</p>
+                      <p className="text-sm text-muted-foreground">Contact for availability</p>
                     </div>
                   </div>
                   <Badge variant="secondary" className="w-full justify-center py-2">
-                    Currently Accepting Inquiries
+                    {profile.status === 'approved' ? 'Accepting Inquiries' : 'Profile Under Review'}
                   </Badge>
                 </CardContent>
               </Card>
@@ -174,16 +214,20 @@ export default function CreatorProfilePage() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Response Rate</span>
-                    <span className="font-semibold">98%</span>
+                    <span className="text-muted-foreground">Creasearch Score</span>
+                    <span className="font-semibold">{profile.creasearch_score || 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Avg Response Time</span>
-                    <span className="font-semibold">2 hours</span>
+                    <span className="text-muted-foreground">Followers</span>
+                    <span className="font-semibold">{(profile.follower_total || 0).toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Project Success Rate</span>
-                    <span className="font-semibold">100%</span>
+                    <span className="text-muted-foreground">Completed Gigs</span>
+                    <span className="font-semibold">{profile.gigs_completed || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Profile Completion</span>
+                    <span className="font-semibold">{profile.profile_completion || 0}%</span>
                   </div>
                 </CardContent>
               </Card>
@@ -192,11 +236,11 @@ export default function CreatorProfilePage() {
         </div>
       </main>
       <Footer />
-      
+
       <InquiryModal
         open={inquiryModalOpen}
         onClose={() => setInquiryModalOpen(false)}
-        creatorName="Ayesha Khan"
+        creatorName={profile.name}
       />
     </div>
   );

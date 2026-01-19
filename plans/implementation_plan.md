@@ -202,13 +202,13 @@ CREATE POLICY "Users manage own profile" ON profiles
 - [x] Fix Vite env loading (envDir config)
 - [ ] Protected route wrapper
 
-### Phase 4: Connect Frontend to API ✅
+### Phase 4: Connect Frontend to API ✅ COMPLETE
 - [x] Create API service layer (api.ts)
 - [x] ProfileCreationPage → POST /api/profiles
 - [x] Profile Status Check (GET /api/profiles/me) - shows pending/approved/rejected
 - [x] AdminDashboardPage → approve/reject profiles
-- [ ] SearchPage → GET /api/profiles (uses mock data until DB populated)
-- [ ] CreatorProfilePage → GET /api/profiles/:id
+- [x] SearchPage → GET /api/profiles (with mock data fallback)
+- [x] CreatorProfilePage → GET /api/profiles/:id
 
 ### Phase 5: File Uploads
 - [ ] Profile photo upload to Supabase Storage
@@ -223,7 +223,7 @@ CREATE POLICY "Users manage own profile" ON profiles
 ### Phase 7: Deployment
 - [ ] Deploy to Vercel
 - [ ] Configure environment variables
-- [ ] Connect custom domain
+- [ ] Connect custom domain (creasearch.com)
 - [ ] Configure Hostinger DNS
 
 ---
