@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { profileService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
+import { emailService } from "./services/email";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -130,6 +131,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // TODO: Add admin auth check
       const profile = await profileService.approve(req.params.id);
+
+      // Send approval email (non-blocking)
+      emailService.sendProfileApprovedEmail(profile.user_id, profile.name)
+        .catch(err => console.error('[Email] Failed to send approval email:', err));
+
       res.json(profile);
     } catch (error) {
       console.error("Error approving profile:", error);
@@ -142,6 +148,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // TODO: Add admin auth check
       const profile = await profileService.reject(req.params.id);
+
+      // Send rejection email (non-blocking)
+      emailService.sendProfileRejectedEmail(profile.user_id, profile.name)
+        .catch(err => console.error('[Email] Failed to send rejection email:', err));
+
       res.json(profile);
     } catch (error) {
       console.error("Error rejecting profile:", error);

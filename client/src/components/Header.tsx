@@ -48,9 +48,6 @@ export function Header() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="hidden md:flex hover-elevate active-elevate-2" data-testid="button-search">
-              <Search className="h-5 w-5" />
-            </Button>
             <ThemeToggle />
 
             {!loading && user ? (

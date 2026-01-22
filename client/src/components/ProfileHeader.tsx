@@ -4,7 +4,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CreasearchScore } from "./CreasearchScore";
 import { VerificationBadge } from "./VerificationBadge";
 import { MapPin, Users, Briefcase, MessageSquare } from "lucide-react";
-import { SiYoutube, SiInstagram, SiLinkedin } from "react-icons/si";
+import { SiYoutube, SiInstagram, SiLinkedin, SiX } from "react-icons/si";
+
+interface SocialLinks {
+  youtube?: string;
+  instagram?: string;
+  linkedin?: string;
+  twitter?: string;
+}
 
 interface ProfileHeaderProps {
   name: string;
@@ -16,6 +23,8 @@ interface ProfileHeaderProps {
   followerCount: number;
   completedGigs: number;
   tags: string[];
+  socialLinks?: SocialLinks;
+  onInquiryClick?: () => void;
 }
 
 export function ProfileHeader({
@@ -28,7 +37,15 @@ export function ProfileHeader({
   followerCount,
   completedGigs,
   tags,
+  socialLinks,
+  onInquiryClick,
 }: ProfileHeaderProps) {
+  const openLink = (url: string | undefined) => {
+    if (url) {
+      window.open(url.startsWith('http') ? url : `https://${url}`, '_blank');
+    }
+  };
+
   return (
     <div className="bg-card border-b">
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
@@ -52,9 +69,9 @@ export function ProfileHeader({
                 <div className="flex flex-wrap gap-3 mb-4">
                   <VerificationBadge type="photo" verified={verified} />
                   <VerificationBadge type="video" verified={verified} />
-                  <VerificationBadge type="youtube" verified={true} />
-                  <VerificationBadge type="instagram" verified={true} />
-                  <VerificationBadge type="linkedin" verified={true} />
+                  {socialLinks?.youtube && <VerificationBadge type="youtube" verified={true} />}
+                  {socialLinks?.instagram && <VerificationBadge type="instagram" verified={true} />}
+                  {socialLinks?.linkedin && <VerificationBadge type="linkedin" verified={true} />}
                 </div>
               </div>
 
@@ -88,22 +105,34 @@ export function ProfileHeader({
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button data-testid="button-send-inquiry">
+              <Button data-testid="button-send-inquiry" onClick={onInquiryClick}>
                 <MessageSquare className="w-4 h-4 mr-2" />
                 Send Inquiry
               </Button>
-              <Button variant="outline" data-testid="button-youtube">
-                <SiYoutube className="w-4 h-4 mr-2" />
-                85K
-              </Button>
-              <Button variant="outline" data-testid="button-instagram">
-                <SiInstagram className="w-4 h-4 mr-2" />
-                120K
-              </Button>
-              <Button variant="outline" data-testid="button-linkedin">
-                <SiLinkedin className="w-4 h-4 mr-2" />
-                45K
-              </Button>
+              {socialLinks?.youtube && (
+                <Button variant="outline" onClick={() => openLink(socialLinks.youtube)} data-testid="button-youtube">
+                  <SiYoutube className="w-4 h-4 mr-2" />
+                  YouTube
+                </Button>
+              )}
+              {socialLinks?.instagram && (
+                <Button variant="outline" onClick={() => openLink(socialLinks.instagram)} data-testid="button-instagram">
+                  <SiInstagram className="w-4 h-4 mr-2" />
+                  Instagram
+                </Button>
+              )}
+              {socialLinks?.linkedin && (
+                <Button variant="outline" onClick={() => openLink(socialLinks.linkedin)} data-testid="button-linkedin">
+                  <SiLinkedin className="w-4 h-4 mr-2" />
+                  LinkedIn
+                </Button>
+              )}
+              {socialLinks?.twitter && (
+                <Button variant="outline" onClick={() => openLink(socialLinks.twitter)} data-testid="button-twitter">
+                  <SiX className="w-4 h-4 mr-2" />
+                  Twitter/X
+                </Button>
+              )}
             </div>
           </div>
         </div>

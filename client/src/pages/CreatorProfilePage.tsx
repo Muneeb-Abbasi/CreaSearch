@@ -79,6 +79,8 @@ export default function CreatorProfilePage() {
           followerCount={profile.follower_total || 0}
           completedGigs={profile.gigs_completed || 0}
           tags={profile.collaboration_types || []}
+          socialLinks={profile.social_links as { youtube?: string; instagram?: string; linkedin?: string; twitter?: string } | undefined}
+          onInquiryClick={() => setInquiryModalOpen(true)}
         />
 
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
