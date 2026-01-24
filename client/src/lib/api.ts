@@ -1,6 +1,10 @@
 import { supabase } from './supabase';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+let envApiBase = import.meta.env.VITE_API_BASE_URL || '/api';
+if (envApiBase !== '/api' && !envApiBase.startsWith('http')) {
+    envApiBase = `https://${envApiBase}`;
+}
+const API_BASE = envApiBase;
 
 export interface Profile {
     id: string;
