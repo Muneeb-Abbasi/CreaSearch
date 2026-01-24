@@ -1,6 +1,6 @@
-// API service for frontend to communicate with backend
+import { supabase } from './supabase';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export interface Profile {
     id: string;
@@ -33,11 +33,20 @@ export interface ProfileFilters {
     collaborationType?: string;
 }
 
+async function getAuthHeaders(): Promise<HeadersInit> {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
 async function fetchWithError<T>(url: string, options?: RequestInit): Promise<T> {
+    const authHeaders = await getAuthHeaders();
+
     const response = await fetch(url, {
         ...options,
         headers: {
             'Content-Type': 'application/json',
+            ...authHeaders,
             ...options?.headers,
         },
     });
@@ -54,7 +63,11 @@ export const profileApi = {
     // Get current user's profile
     async getMyProfile(userId: string): Promise<Profile | null> {
         try {
-            const response = await fetch(`${API_BASE}/profiles/me?user_id=${userId}`);
+            const authHeaders = await getAuthHeaders();
+            const response = await fetch(`${API_BASE}/profiles/me?user_id=${userId}`, {
+                headers: { ...authHeaders }
+            });
+
             if (response.status === 404) {
                 return null;
             }
@@ -106,7 +119,11 @@ export const profileApi = {
 
     // Delete profile
     async delete(id: string): Promise<void> {
-        await fetch(`${API_BASE}/profiles/${id}`, { method: 'DELETE' });
+        const authHeaders = await getAuthHeaders();
+        await fetch(`${API_BASE}/profiles/${id}`, {
+            method: 'DELETE',
+            headers: { ...authHeaders }
+        });
     },
 };
 
@@ -132,8 +149,10 @@ export const adminApi = {
 
     // Delete profile
     async delete(id: string): Promise<void> {
+        const authHeaders = await getAuthHeaders();
         const response = await fetch(`${API_BASE}/admin/delete/${id}`, {
             method: 'DELETE',
+            headers: { ...authHeaders }
         });
 
         if (!response.ok) {
@@ -152,6 +171,7 @@ export interface UploadResult {
 export const uploadApi = {
     // Upload profile photo
     async uploadPhoto(userId: string, file: File): Promise<UploadResult> {
+        const authHeaders = await getAuthHeaders();
         const formData = new FormData();
         formData.append('photo', file);
         formData.append('user_id', userId);
@@ -159,6 +179,7 @@ export const uploadApi = {
         const response = await fetch(`${API_BASE}/upload/photo`, {
             method: 'POST',
             body: formData,
+            headers: { ...authHeaders } // FormData handles Content-Type boundary
         });
 
         if (!response.ok) {
@@ -171,6 +192,7 @@ export const uploadApi = {
 
     // Upload video intro
     async uploadVideo(userId: string, file: File): Promise<UploadResult> {
+        const authHeaders = await getAuthHeaders();
         const formData = new FormData();
         formData.append('video', file);
         formData.append('user_id', userId);
@@ -178,6 +200,7 @@ export const uploadApi = {
         const response = await fetch(`${API_BASE}/upload/video`, {
             method: 'POST',
             body: formData,
+            headers: { ...authHeaders }
         });
 
         if (!response.ok) {

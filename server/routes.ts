@@ -4,6 +4,7 @@ import multer from "multer";
 import { profileService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
+import { requireAuth } from "./middleware/auth";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -77,22 +78,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/profiles - Create new profile
-  app.post("/api/profiles", async (req: Request, res: Response) => {
+  app.post("/api/profiles", requireAuth, async (req: Request, res: Response) => {
     try {
-      // TODO: Add auth middleware to get user_id from session
-      const profile = await profileService.create(req.body);
+      console.log("[POST] /api/profiles - Payload:", JSON.stringify(req.body));
+
+      // Use verified user ID from token
+      const userId = req.user.id;
+
+      const profileData = {
+        ...req.body,
+        user_id: userId, // Enforce checks
+        status: 'pending' // Enforce status
+      };
+
+      const profile = await profileService.create(profileData);
       res.status(201).json(profile);
     } catch (error) {
       console.error("Error creating profile:", error);
+      // @ts-ignore
+      if (error && error.message) console.error("Error message:", error.message);
       res.status(500).json({ error: "Failed to create profile" });
     }
   });
 
   // PUT /api/profiles/:id - Update profile
-  app.put("/api/profiles/:id", async (req: Request, res: Response) => {
+  app.put("/api/profiles/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      // TODO: Add auth check - only owner can update
-      const profile = await profileService.update(req.params.id, req.body);
+      const profileId = req.params.id;
+      const userId = req.user.id;
+
+      // Verify ownership
+      const existingProfile = await profileService.getById(profileId);
+      if (!existingProfile) return res.status(404).json({ error: "Profile not found" });
+
+      // Allow if user owns profile or is admin (TODO: implement robust admin check)
+      if (existingProfile.user_id !== userId) {
+        return res.status(403).json({ error: "Unauthorized to update this profile" });
+      }
+
+      const profile = await profileService.update(profileId, req.body);
       res.json(profile);
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -101,10 +125,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/profiles/:id - Delete profile
-  app.delete("/api/profiles/:id", async (req: Request, res: Response) => {
+  app.delete("/api/profiles/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      // TODO: Add auth check - only owner or admin can delete
-      await profileService.delete(req.params.id);
+      const profileId = req.params.id;
+      const userId = req.user.id;
+
+      const existingProfile = await profileService.getById(profileId);
+      if (!existingProfile) return res.status(404).json({ error: "Profile not found" });
+
+      if (existingProfile.user_id !== userId) {
+        return res.status(403).json({ error: "Unauthorized to delete this profile" });
+      }
+
+      await profileService.delete(profileId);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting profile:", error);
@@ -114,10 +147,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============= ADMIN ROUTES =============
 
-  // GET /api/admin/pending - Get pending profiles for approval
-  app.get("/api/admin/pending", async (req: Request, res: Response) => {
+  // GET /api/admin/pending
+  app.get("/api/admin/pending", requireAuth, async (req: Request, res: Response) => {
     try {
-      // TODO: Add admin auth check
+      // TODO: Add strict admin role check here. For now, requireAuth is a start.
       const profiles = await profileService.getPending();
       res.json(profiles);
     } catch (error) {
@@ -126,16 +159,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/admin/approve/:id - Approve a profile
-  app.post("/api/admin/approve/:id", async (req: Request, res: Response) => {
+  // POST /api/admin/approve/:id
+  app.post("/api/admin/approve/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      // TODO: Add admin auth check
       const profile = await profileService.approve(req.params.id);
-
-      // Send approval email (non-blocking)
       emailService.sendProfileApprovedEmail(profile.user_id, profile.name)
         .catch(err => console.error('[Email] Failed to send approval email:', err));
-
       res.json(profile);
     } catch (error) {
       console.error("Error approving profile:", error);
@@ -143,16 +172,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/admin/reject/:id - Reject a profile
-  app.post("/api/admin/reject/:id", async (req: Request, res: Response) => {
+  // POST /api/admin/reject/:id
+  app.post("/api/admin/reject/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      // TODO: Add admin auth check
       const profile = await profileService.reject(req.params.id);
-
-      // Send rejection email (non-blocking)
       emailService.sendProfileRejectedEmail(profile.user_id, profile.name)
         .catch(err => console.error('[Email] Failed to send rejection email:', err));
-
       res.json(profile);
     } catch (error) {
       console.error("Error rejecting profile:", error);
@@ -160,16 +185,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // DELETE /api/admin/delete/:id - Delete a profile (admin only)
-  app.delete("/api/admin/delete/:id", async (req: Request, res: Response) => {
+  // DELETE /api/admin/delete/:id
+  app.delete("/api/admin/delete/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      // TODO: Verify user is admin
       const profileId = req.params.id;
-      console.log(`[DELETE] Attempting to delete profile: ${profileId}`);
-
-      // TODO: Add admin auth check
       await profileService.delete(profileId);
-
-      console.log(`[DELETE] Successfully deleted profile: ${profileId}`);
       res.json({ success: true, message: "Profile deleted" });
     } catch (error) {
       console.error("Error deleting profile:", error);
@@ -179,29 +200,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ============= AUTH ROUTES =============
 
-  // GET /api/auth/me - Get current user (placeholder)
-  app.get("/api/auth/me", async (req: Request, res: Response) => {
-    // TODO: Implement with Supabase Auth
-    res.json({ user: null, message: "Auth not yet implemented" });
+  app.get("/api/auth/me", requireAuth, async (req: Request, res: Response) => {
+    res.json({ user: req.user });
   });
 
   // ============= UPLOAD ROUTES =============
 
-  // POST /api/upload/photo - Upload profile photo
-  app.post("/api/upload/photo", upload.single('photo'), async (req: Request, res: Response) => {
+  // POST /api/upload/photo
+  app.post("/api/upload/photo", requireAuth, upload.single('photo'), async (req: Request, res: Response) => {
     try {
-      const userId = req.body.user_id;
+      // Use verified user ID
+      const userId = req.user.id;
       const file = req.file;
 
-      if (!userId) {
-        return res.status(400).json({ error: "user_id is required" });
-      }
+      if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-      if (!file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
-      // Upload to Supabase Storage
       const result = await storageService.uploadProfilePhoto(
         userId,
         file.buffer,
@@ -209,32 +222,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         file.mimetype
       );
 
-      res.json({
-        success: true,
-        url: result.url,
-        path: result.path
-      });
+      res.json({ success: true, url: result.url, path: result.path });
     } catch (error) {
       console.error("Error uploading photo:", error);
       res.status(500).json({ error: "Failed to upload photo" });
     }
   });
 
-  // POST /api/upload/video - Upload video intro
-  app.post("/api/upload/video", upload.single('video'), async (req: Request, res: Response) => {
+  // POST /api/upload/video
+  app.post("/api/upload/video", requireAuth, upload.single('video'), async (req: Request, res: Response) => {
     try {
-      const userId = req.body.user_id;
+      const userId = req.user.id;
       const file = req.file;
 
-      if (!userId) {
-        return res.status(400).json({ error: "user_id is required" });
-      }
+      if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-      if (!file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
-      // Upload to Supabase Storage
       const result = await storageService.uploadVideoIntro(
         userId,
         file.buffer,
@@ -242,11 +244,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         file.mimetype
       );
 
-      res.json({
-        success: true,
-        url: result.url,
-        path: result.path
-      });
+      res.json({ success: true, url: result.url, path: result.path });
     } catch (error) {
       console.error("Error uploading video:", error);
       res.status(500).json({ error: "Failed to upload video" });
