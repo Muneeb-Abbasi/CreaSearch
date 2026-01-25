@@ -287,6 +287,7 @@ export default function ProfileCreationPage() {
                         title: existingProfile.title || "",
                         location: existingProfile.location || "",
                         bio: existingProfile.bio || "",
+                        followerCount: existingProfile.follower_total?.toString() || "",
                         collaborationTypes: existingProfile.collaboration_types || [],
                         videoIntroUrl: existingProfile.video_intro_url || "",
                         youtube: existingProfile.social_links?.youtube || "",
