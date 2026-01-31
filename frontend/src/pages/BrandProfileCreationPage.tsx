@@ -10,13 +10,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CountrySelect } from "@/components/ui/country-select";
-import { CitySelect } from "@/components/ui/city-select";
 import { Upload, CheckCircle2, Loader2, Clock, XCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileApi, uploadApi, Profile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
-import { getCountryName } from "@/data/countries-cities";
+import { CountrySelect } from "@/components/ui/country-select";
+import { CitySelect } from "@/components/ui/city-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   validateName,
   validateIndustry,
@@ -24,10 +30,10 @@ import {
   validatePhone,
   validateCountry,
   validateCity,
-  ValidationResult
+  validateUrl
 } from "@/utils/validation";
 
-export default function ProfileCreationPage() {
+export default function BrandProfileCreationPage() {
   const { user, loading: authLoading } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -36,29 +42,27 @@ export default function ProfileCreationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [existingProfile, setExistingProfile] = useState<Profile | null>(null);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const totalSteps = 4;
   const progress = (currentStep / totalSteps) * 100;
 
   // Form state
   const [formData, setFormData] = useState({
-    name: "",
-    title: "",
-    industry: "",
-    niche: "",
-    city: "",
-    country: "",
-    phone: "",
-    bio: "",
-    followerCount: "",
-    collaborationTypes: [] as string[],
-    videoIntroUrl: "",
-    youtube: "",
-    instagram: "",
+    name: "", // Company/Organization name
+    industry: "", // Required
+    niche: "", // Required
+    city: "", // Required
+    country: "", // Required
+    phone: "", // Required
+    companySize: "", // Company size
+    website: "", // Website URL
+    bio: "", // Company description
     linkedin: "",
     twitter: "",
+    facebook: "",
+    instagram: "",
     agreedToTerms: false,
   });
 
@@ -66,9 +70,9 @@ export default function ProfileCreationPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const steps = [
-    "Basic Info",
-    "Media Upload",
-    "Social Links",
+    "Company Info",
+    "Logo Upload",
+    "Online Presence",
     "Review & Submit"
   ];
 
@@ -85,9 +89,13 @@ export default function ProfileCreationPage() {
       setIsLoadingProfile(true);
       try {
         const profile = await profileApi.getMyProfile(user.id);
-        setExistingProfile(profile);
+        // Only show if it's an organization profile
+        if (profile?.role === 'organization') {
+          setExistingProfile(profile);
+        } else {
+          setExistingProfile(null);
+        }
       } catch (error) {
-        // Profile not found (was deleted)
         setExistingProfile(null);
       }
       setIsLoadingProfile(false);
@@ -100,40 +108,49 @@ export default function ProfileCreationPage() {
     }
   }, [user, authLoading]);
 
-  // Re-fetch profile when page becomes visible (fixes stale cache after admin delete)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user?.id) {
-        checkExistingProfile();
-      }
-    };
+  // Real-time validation handler
+  const handleFieldChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user]);
-
-  // Prefill name from Google profile
-  useEffect(() => {
-    if (user?.user_metadata?.name && !formData.name) {
-      setFormData(prev => ({ ...prev, name: user.user_metadata.name }));
+    // Real-time validation
+    let validation: { isValid: boolean; error?: string };
+    switch (field) {
+      case 'name':
+        validation = validateName(value);
+        break;
+      case 'industry':
+        validation = validateIndustry(value);
+        break;
+      case 'niche':
+        validation = validateNiche(value);
+        break;
+      case 'phone':
+        validation = validatePhone(value);
+        break;
+      case 'website':
+        validation = validateUrl(value, "Website URL");
+        break;
+      case 'country':
+        validation = validateCountry(value);
+        if (validation.isValid) {
+          setErrors(prev => ({ ...prev, country: '' }));
+        }
+        break;
+      case 'city':
+        validation = validateCity(value, formData.country);
+        break;
+      default:
+        validation = { isValid: true };
     }
-  }, [user]);
 
-  const handleCollaborationTypeChange = (type: string, checked: boolean) => {
-    if (checked) {
-      setFormData(prev => ({
-        ...prev,
-        collaborationTypes: [...prev.collaborationTypes, type]
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        collaborationTypes: prev.collaborationTypes.filter(t => t !== type)
-      }));
-    }
+    // Update errors
+    setErrors(prev => ({
+      ...prev,
+      [field]: validation.isValid ? '' : validation.error || ''
+    }));
   };
 
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
@@ -144,16 +161,46 @@ export default function ProfileCreationPage() {
         });
         return;
       }
-      setPhotoFile(file);
+      setLogoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
+        setLogoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
   };
 
   const handleSubmit = async () => {
+    // Validate all required fields
+    const nameValidation = validateName(formData.name);
+    const industryValidation = validateIndustry(formData.industry);
+    const nicheValidation = validateNiche(formData.niche);
+    const phoneValidation = validatePhone(formData.phone);
+    const countryValidation = validateCountry(formData.country);
+    const cityValidation = validateCity(formData.city, formData.country);
+
+    // Collect all errors
+    const allErrors: Record<string, string> = {};
+    if (!nameValidation.isValid) allErrors.name = nameValidation.error!;
+    if (!industryValidation.isValid) allErrors.industry = industryValidation.error!;
+    if (!nicheValidation.isValid) allErrors.niche = nicheValidation.error!;
+    if (!phoneValidation.isValid) allErrors.phone = phoneValidation.error!;
+    if (!countryValidation.isValid) allErrors.country = countryValidation.error!;
+    if (!cityValidation.isValid) allErrors.city = cityValidation.error!;
+
+    // Set errors and prevent submission if validation fails
+    if (Object.keys(allErrors).length > 0) {
+      setErrors(allErrors);
+      toast({
+        title: "Validation failed",
+        description: "Please fix the errors in the form",
+        variant: "destructive"
+      });
+      const firstErrorField = Object.keys(allErrors)[0];
+      document.getElementById(firstErrorField)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     if (!formData.agreedToTerms) {
       toast({
         title: "Please agree to terms",
@@ -166,62 +213,62 @@ export default function ProfileCreationPage() {
     setIsSubmitting(true);
     try {
       const socialLinks: Record<string, string> = {};
-      if (formData.youtube) socialLinks.youtube = formData.youtube;
-      if (formData.instagram) socialLinks.instagram = formData.instagram;
       if (formData.linkedin) socialLinks.linkedin = formData.linkedin;
       if (formData.twitter) socialLinks.twitter = formData.twitter;
+      if (formData.facebook) socialLinks.facebook = formData.facebook;
+      if (formData.instagram) socialLinks.instagram = formData.instagram;
+      if (formData.website) socialLinks.website = formData.website;
 
-      // Upload photo first if selected
-      let avatarUrl: string | null = null;
-      if (photoFile && user?.id) {
-        setIsUploadingPhoto(true);
+      // Upload logo first if selected
+      let logoUrl: string | null = null;
+      if (logoFile && user?.id) {
+        setIsUploadingLogo(true);
         try {
-          const uploadResult = await uploadApi.uploadPhoto(user.id, photoFile);
-          avatarUrl = uploadResult.url;
+          const uploadResult = await uploadApi.uploadPhoto(user.id, logoFile);
+          logoUrl = uploadResult.url;
         } catch (uploadError) {
-          console.error("Photo upload failed:", uploadError);
+          console.error("Logo upload failed:", uploadError);
           toast({
-            title: "Photo upload failed",
-            description: "Profile will be created without photo. You can add it later.",
+            title: "Logo upload failed",
+            description: "Profile will be created without logo. You can add it later.",
             variant: "destructive"
           });
         } finally {
-          setIsUploadingPhoto(false);
+          setIsUploadingLogo(false);
         }
       }
 
       await profileApi.create({
         user_id: user?.id,
-        name: formData.name,
-        title: formData.title,
-        industry: formData.industry,
-        niche: formData.niche,
-        city: formData.city,
-        country: formData.country,
-        phone: formData.phone,
-        location: `${formData.city}, ${getCountryName(formData.country)}`, // Backward compatibility
-        bio: formData.bio,
-        avatar_url: avatarUrl,
-        follower_total: formData.followerCount ? parseInt(formData.followerCount) : 0,
-        collaboration_types: formData.collaborationTypes,
-        video_intro_url: formData.videoIntroUrl || null,
+        name: formData.name.trim(),
+        title: formData.companySize || null, // Use company size as title
+        industry: formData.industry.trim(), // Required
+        niche: formData.niche.trim(), // Required
+        city: formData.city, // Required
+        country: formData.country, // Required
+        phone: formData.phone.trim(), // Required
+        bio: formData.bio.trim() || null,
+        avatar_url: logoUrl,
+        follower_total: 0, // Brands don't have followers
+        collaboration_types: [], // Brands don't have collaboration types
+        video_intro_url: null,
         social_links: socialLinks,
-        role: 'creator',
+        role: 'organization', // Brand role
         status: 'pending',
         profile_completion: calculateCompletion(),
       });
 
       toast({
-        title: "Profile submitted!",
-        description: "Your profile is pending review. We'll notify you once approved.",
+        title: "Brand profile submitted!",
+        description: "Your brand profile is pending review. We'll notify you once approved.",
       });
 
       navigate("/");
     } catch (error) {
-      console.error("Error creating profile:", error);
+      console.error("Error creating brand profile:", error);
       toast({
         title: "Error",
-        description: "Failed to create profile. Please try again.",
+        description: "Failed to create brand profile. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -231,15 +278,15 @@ export default function ProfileCreationPage() {
 
   const calculateCompletion = () => {
     let score = 0;
-    if (formData.name) score += 10;
-    if (formData.title) score += 10;
-    if (formData.industry) score += 10;
-    if (formData.niche) score += 10;
-    if (formData.country && formData.city) score += 10;
-    if (formData.phone) score += 10;
+    if (formData.name && !errors.name) score += 15;
+    if (formData.industry && !errors.industry) score += 12; // Required
+    if (formData.niche && !errors.niche) score += 12; // Required
+    if (formData.phone && !errors.phone) score += 10; // Required
+    if (formData.city && formData.country && !errors.city && !errors.country) score += 10; // Required
+    if (formData.companySize) score += 8;
+    if (formData.website && !errors.website) score += 8;
     if (formData.bio) score += 15;
-    if (formData.collaborationTypes.length > 0) score += 10;
-    if (formData.youtube || formData.instagram || formData.linkedin || formData.twitter) score += 15;
+    if (formData.linkedin || formData.twitter || formData.facebook || formData.instagram) score += 10;
     return score;
   };
 
@@ -263,19 +310,19 @@ export default function ProfileCreationPage() {
                 {existingProfile.status === 'pending' && (
                   <>
                     <Clock className="w-16 h-16 mx-auto mb-4 text-yellow-500" />
-                    <CardTitle className="text-2xl">Profile Under Review</CardTitle>
+                    <CardTitle className="text-2xl">Brand Profile Under Review</CardTitle>
                   </>
                 )}
                 {existingProfile.status === 'approved' && (
                   <>
                     <CheckCircle className="w-16 h-16 mx-auto mb-4 text-green-500" />
-                    <CardTitle className="text-2xl">Profile Approved!</CardTitle>
+                    <CardTitle className="text-2xl">Brand Profile Approved!</CardTitle>
                   </>
                 )}
                 {existingProfile.status === 'rejected' && (
                   <>
                     <XCircle className="w-16 h-16 mx-auto mb-4 text-red-500" />
-                    <CardTitle className="text-2xl">Profile Needs Updates</CardTitle>
+                    <CardTitle className="text-2xl">Brand Profile Needs Updates</CardTitle>
                   </>
                 )}
               </CardHeader>
@@ -283,11 +330,11 @@ export default function ProfileCreationPage() {
                 {existingProfile.status === 'pending' && (
                   <>
                     <p className="text-muted-foreground">
-                      Your creator profile is currently being reviewed by our team.
+                      Your brand profile is currently being reviewed by our team.
                       You'll receive a notification once it's approved.
                     </p>
                     <div className="p-4 bg-muted rounded-lg">
-                      <p className="text-sm font-medium">Profile: {existingProfile.name}</p>
+                      <p className="text-sm font-medium">Brand: {existingProfile.name}</p>
                       <p className="text-xs text-muted-foreground">Submitted on {new Date(existingProfile.created_at).toLocaleDateString()}</p>
                     </div>
                   </>
@@ -295,41 +342,38 @@ export default function ProfileCreationPage() {
                 {existingProfile.status === 'approved' && (
                   <>
                     <p className="text-muted-foreground">
-                      Congratulations! Your profile is now live and visible to organizations.
+                      Congratulations! Your brand profile is now live and visible to creators.
                     </p>
                     <Button onClick={() => navigate(`/creator/${existingProfile.id}`)}>
-                      View My Profile
+                      View My Brand Profile
                     </Button>
                   </>
                 )}
                 {existingProfile.status === 'rejected' && (
                   <>
                     <p className="text-muted-foreground">
-                      Your profile wasn't approved. Please update your information and resubmit.
+                      Your brand profile wasn't approved. Please update your information and resubmit.
                     </p>
                     <Button onClick={() => {
-                      // Pre-fill form with existing data for editing
                       setFormData({
                         name: existingProfile.name,
-                        title: existingProfile.title || "",
                         industry: existingProfile.industry || "",
                         niche: existingProfile.niche || "",
                         city: existingProfile.city || "",
                         country: existingProfile.country || "",
                         phone: existingProfile.phone || "",
+                        companySize: existingProfile.title || "",
+                        website: existingProfile.social_links?.website || "",
                         bio: existingProfile.bio || "",
-                        followerCount: existingProfile.follower_total?.toString() || "",
-                        collaborationTypes: existingProfile.collaboration_types || [],
-                        videoIntroUrl: existingProfile.video_intro_url || "",
-                        youtube: existingProfile.social_links?.youtube || "",
-                        instagram: existingProfile.social_links?.instagram || "",
                         linkedin: existingProfile.social_links?.linkedin || "",
                         twitter: existingProfile.social_links?.twitter || "",
+                        facebook: existingProfile.social_links?.facebook || "",
+                        instagram: existingProfile.social_links?.instagram || "",
                         agreedToTerms: false,
                       });
-                      setExistingProfile(null); // Clear to show form
+                      setExistingProfile(null);
                     }}>
-                      Edit Profile
+                      Edit Brand Profile
                     </Button>
                   </>
                 )}
@@ -352,7 +396,7 @@ export default function ProfileCreationPage() {
         <div className="max-w-4xl mx-auto px-4 md:px-8 py-8">
           <div className="mb-8">
             <h1 className="font-heading text-3xl font-bold mb-4" data-testid="text-page-title">
-              Create Your Creator Profile
+              Create Your Brand Profile
             </h1>
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
@@ -378,30 +422,32 @@ export default function ProfileCreationPage() {
           {currentStep === 1 && (
             <Card>
               <CardHeader>
-                <CardTitle>Basic Information</CardTitle>
+                <CardTitle>Company Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="full-name">Full Name *</Label>
-                    <Input
-                      id="full-name"
-                      placeholder="Your full name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      data-testid="input-name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Professional Title *</Label>
-                    <Input
-                      id="title"
-                      placeholder="e.g., Tech Content Creator"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      data-testid="input-title"
-                    />
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company-name">Company/Organization Name *</Label>
+                  <Input
+                    id="company-name"
+                    placeholder="Your company or organization name"
+                    value={formData.name}
+                    onChange={(e) => handleFieldChange('name', e.target.value)}
+                    onBlur={() => {
+                      const validation = validateName(formData.name);
+                      if (!validation.isValid) {
+                        setErrors(prev => ({ ...prev, name: validation.error || '' }));
+                      }
+                    }}
+                    required
+                    className={errors.name ? "border-red-500" : ""}
+                    data-testid="input-company-name"
+                  />
+                  {errors.name && (
+                    <p className="text-xs text-red-500">{errors.name}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Letters only, no numbers allowed
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -409,62 +455,90 @@ export default function ProfileCreationPage() {
                     <Label htmlFor="industry">Industry *</Label>
                     <Input
                       id="industry"
-                      placeholder="e.g., Technology, Fashion, Gaming"
+                      placeholder="e.g., Technology, Fashion, Food, Education"
                       value={formData.industry}
-                      onChange={(e) => {
-                        setFormData({ ...formData, industry: e.target.value });
-                        const result = validateIndustry(e.target.value);
-                        setErrors(prev => ({ ...prev, industry: result.error || '' }));
+                      onChange={(e) => handleFieldChange('industry', e.target.value)}
+                      onBlur={() => {
+                        const validation = validateIndustry(formData.industry);
+                        if (!validation.isValid) {
+                          setErrors(prev => ({ ...prev, industry: validation.error || '' }));
+                        }
                       }}
+                      required
+                      className={errors.industry ? "border-red-500" : ""}
                       data-testid="input-industry"
                     />
-                    {errors.industry && <p className="text-xs text-red-500">{errors.industry}</p>}
+                    {errors.industry && (
+                      <p className="text-xs text-red-500">{errors.industry}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="niche">Niche/Specialization *</Label>
+                    <Label htmlFor="niche">Niche *</Label>
                     <Input
                       id="niche"
-                      placeholder="e.g., Tech Reviews, Lifestyle Vlogs"
+                      placeholder="e.g., SaaS, Streetwear, Fine Dining, EdTech"
                       value={formData.niche}
-                      onChange={(e) => {
-                        setFormData({ ...formData, niche: e.target.value });
-                        const result = validateNiche(e.target.value);
-                        setErrors(prev => ({ ...prev, niche: result.error || '' }));
+                      onChange={(e) => handleFieldChange('niche', e.target.value)}
+                      onBlur={() => {
+                        const validation = validateNiche(formData.niche);
+                        if (!validation.isValid) {
+                          setErrors(prev => ({ ...prev, niche: validation.error || '' }));
+                        }
                       }}
+                      required
+                      className={errors.niche ? "border-red-500" : ""}
                       data-testid="input-niche"
                     />
-                    {errors.niche && <p className="text-xs text-red-500">{errors.niche}</p>}
+                    {errors.niche && (
+                      <p className="text-xs text-red-500">{errors.niche}</p>
+                    )}
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-size">Company Size</Label>
+                  <Select value={formData.companySize} onValueChange={(value) => setFormData({ ...formData, companySize: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select company size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="startup">Startup (1-10 employees)</SelectItem>
+                      <SelectItem value="small">Small (11-50 employees)</SelectItem>
+                      <SelectItem value="medium">Medium (51-200 employees)</SelectItem>
+                      <SelectItem value="large">Large (201-1000 employees)</SelectItem>
+                      <SelectItem value="enterprise">Enterprise (1000+ employees)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label>Country *</Label>
+                    <Label htmlFor="country">Country *</Label>
                     <CountrySelect
                       value={formData.country}
                       onValueChange={(value) => {
-                        setFormData({ ...formData, country: value, city: '' });
-                        const result = validateCountry(value);
-                        setErrors(prev => ({ ...prev, country: result.error || '', city: '' }));
+                        handleFieldChange('country', value);
+                        setFormData(prev => ({ ...prev, city: "" }));
+                        setErrors(prev => ({ ...prev, city: '' }));
                       }}
                       placeholder="Select country..."
                     />
-                    {errors.country && <p className="text-xs text-red-500">{errors.country}</p>}
+                    {errors.country && (
+                      <p className="text-xs text-red-500">{errors.country}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label>City *</Label>
+                    <Label htmlFor="city">City *</Label>
                     <CitySelect
                       value={formData.city}
                       countryCode={formData.country}
-                      onValueChange={(value) => {
-                        setFormData({ ...formData, city: value });
-                        const result = validateCity(value, formData.country);
-                        setErrors(prev => ({ ...prev, city: result.error || '' }));
-                      }}
-                      placeholder="Select city..."
+                      onValueChange={(value) => handleFieldChange('city', value)}
+                      placeholder={formData.country ? "Select city..." : "Select country first"}
                       disabled={!formData.country}
                     />
-                    {errors.city && <p className="text-xs text-red-500">{errors.city}</p>}
+                    {errors.city && (
+                      <p className="text-xs text-red-500">{errors.city}</p>
+                    )}
                   </div>
                 </div>
 
@@ -472,61 +546,38 @@ export default function ProfileCreationPage() {
                   <Label htmlFor="phone">Phone Number *</Label>
                   <Input
                     id="phone"
-                    placeholder="+92 300 1234567"
+                    type="tel"
+                    placeholder="+92 300 1234567 or 0300-1234567"
                     value={formData.phone}
-                    onChange={(e) => {
-                      setFormData({ ...formData, phone: e.target.value });
-                      const result = validatePhone(e.target.value);
-                      setErrors(prev => ({ ...prev, phone: result.error || '' }));
+                    onChange={(e) => handleFieldChange('phone', e.target.value)}
+                    onBlur={() => {
+                      const validation = validatePhone(formData.phone);
+                      if (!validation.isValid) {
+                        setErrors(prev => ({ ...prev, phone: validation.error || '' }));
+                      }
                     }}
+                    required
+                    className={errors.phone ? "border-red-500" : ""}
                     data-testid="input-phone"
                   />
-                  {errors.phone && <p className="text-xs text-red-500">{errors.phone}</p>}
-                  <p className="text-xs text-muted-foreground">Include country code (e.g., +92 for Pakistan)</p>
+                  {errors.phone && (
+                    <p className="text-xs text-red-500">{errors.phone}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Include country code (e.g., +92 for Pakistan)
+                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="followerCount">Total Followers/Subscribers</Label>
-                  <Input
-                    id="followerCount"
-                    type="number"
-                    placeholder="e.g., 50000"
-                    value={formData.followerCount}
-                    onChange={(e) => setFormData({ ...formData, followerCount: e.target.value })}
-                    data-testid="input-follower-count"
-                  />
-                  <p className="text-xs text-muted-foreground">Combined followers across all your platforms</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="bio">About You *</Label>
+                  <Label htmlFor="bio">Company Description *</Label>
                   <Textarea
                     id="bio"
-                    placeholder="Tell us about your experience and what makes you unique..."
+                    placeholder="Tell us about your company, what you do, and what makes you unique..."
                     rows={6}
                     value={formData.bio}
                     onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                     data-testid="textarea-bio"
                   />
-                </div>
-
-                <div className="space-y-3">
-                  <Label>Collaboration Types *</Label>
-                  <div className="space-y-3">
-                    {["Video Content", "Podcasts", "Events/Speaking", "Training Sessions"].map((type) => (
-                      <div key={type} className="flex items-center gap-2">
-                        <Checkbox
-                          id={type}
-                          checked={formData.collaborationTypes.includes(type)}
-                          onCheckedChange={(checked) => handleCollaborationTypeChange(type, checked as boolean)}
-                          data-testid={`checkbox-${type}`}
-                        />
-                        <label htmlFor={type} className="text-sm cursor-pointer">
-                          {type}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -535,34 +586,34 @@ export default function ProfileCreationPage() {
           {currentStep === 2 && (
             <Card>
               <CardHeader>
-                <CardTitle>Media Upload</CardTitle>
+                <CardTitle>Logo Upload</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label>Profile Photo</Label>
+                  <Label>Company Logo</Label>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Upload a clear, face-visible photo for verification
+                    Upload your company logo
                   </p>
                   <input
                     type="file"
                     accept="image/*"
-                    onChange={handlePhotoChange}
+                    onChange={handleLogoChange}
                     className="hidden"
-                    id="photo-upload"
-                    data-testid="input-photo"
+                    id="logo-upload"
+                    data-testid="input-logo"
                   />
                   <label
-                    htmlFor="photo-upload"
+                    htmlFor="logo-upload"
                     className="border-2 border-dashed rounded-md p-8 text-center hover:bg-muted/50 cursor-pointer block transition-colors"
                   >
-                    {photoPreview ? (
+                    {logoPreview ? (
                       <div className="flex flex-col items-center">
                         <img
-                          src={photoPreview}
-                          alt="Preview"
-                          className="w-32 h-32 rounded-full object-cover mb-3"
+                          src={logoPreview}
+                          alt="Logo Preview"
+                          className="w-32 h-32 object-contain mb-3"
                         />
-                        <p className="text-sm font-medium text-green-600">Photo selected!</p>
+                        <p className="text-sm font-medium text-green-600">Logo selected!</p>
                         <p className="text-xs text-muted-foreground mt-1">Click to change</p>
                       </div>
                     ) : (
@@ -574,22 +625,6 @@ export default function ProfileCreationPage() {
                     )}
                   </label>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Video Introduction (30-50 seconds)</Label>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Introduce yourself and your work in a short video
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Paste a YouTube/Vimeo link:
-                  </p>
-                  <Input
-                    placeholder="https://youtube.com/..."
-                    value={formData.videoIntroUrl}
-                    onChange={(e) => setFormData({ ...formData, videoIntroUrl: e.target.value })}
-                    data-testid="input-video-url"
-                  />
-                </div>
               </CardContent>
             </Card>
           )}
@@ -597,41 +632,37 @@ export default function ProfileCreationPage() {
           {currentStep === 3 && (
             <Card>
               <CardHeader>
-                <CardTitle>Social Media Links</CardTitle>
+                <CardTitle>Online Presence</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                <p className="text-sm text-muted-foreground">
-                  Add at least one social media handle for verification
-                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="website">Website URL</Label>
+                  <Input
+                    id="website"
+                    type="url"
+                    placeholder="https://yourcompany.com"
+                    value={formData.website}
+                    onChange={(e) => handleFieldChange('website', e.target.value)}
+                    onBlur={() => {
+                      const validation = validateUrl(formData.website, "Website URL");
+                      if (!validation.isValid) {
+                        setErrors(prev => ({ ...prev, website: validation.error || '' }));
+                      }
+                    }}
+                    className={errors.website ? "border-red-500" : ""}
+                    data-testid="input-website"
+                  />
+                  {errors.website && (
+                    <p className="text-xs text-red-500">{errors.website}</p>
+                  )}
+                </div>
 
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="youtube">YouTube Channel</Label>
-                    <Input
-                      id="youtube"
-                      placeholder="https://youtube.com/@username"
-                      value={formData.youtube}
-                      onChange={(e) => setFormData({ ...formData, youtube: e.target.value })}
-                      data-testid="input-youtube"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="instagram">Instagram</Label>
-                    <Input
-                      id="instagram"
-                      placeholder="https://instagram.com/username"
-                      value={formData.instagram}
-                      onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
-                      data-testid="input-instagram"
-                    />
-                  </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="linkedin">LinkedIn</Label>
                     <Input
                       id="linkedin"
-                      placeholder="https://linkedin.com/in/username"
+                      placeholder="https://linkedin.com/company/yourcompany"
                       value={formData.linkedin}
                       onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
                       data-testid="input-linkedin"
@@ -642,19 +673,34 @@ export default function ProfileCreationPage() {
                     <Label htmlFor="twitter">Twitter/X</Label>
                     <Input
                       id="twitter"
-                      placeholder="https://twitter.com/username"
+                      placeholder="https://twitter.com/yourcompany"
                       value={formData.twitter}
                       onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
                       data-testid="input-twitter"
                     />
                   </div>
-                </div>
 
-                <div className="p-4 bg-muted rounded-md">
-                  <p className="text-sm">
-                    <strong>Note:</strong> We'll automatically fetch your follower counts from
-                    connected social media accounts for your Creasearch Score calculation.
-                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="facebook">Facebook</Label>
+                    <Input
+                      id="facebook"
+                      placeholder="https://facebook.com/yourcompany"
+                      value={formData.facebook}
+                      onChange={(e) => setFormData({ ...formData, facebook: e.target.value })}
+                      data-testid="input-facebook"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="instagram">Instagram</Label>
+                    <Input
+                      id="instagram"
+                      placeholder="https://instagram.com/yourcompany"
+                      value={formData.instagram}
+                      onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                      data-testid="input-instagram"
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -668,7 +714,7 @@ export default function ProfileCreationPage() {
               <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <div>
-                    <h3 className="font-semibold mb-2">Profile Summary</h3>
+                    <h3 className="font-semibold mb-2">Brand Profile Summary</h3>
                     <p className="text-sm text-muted-foreground">
                       Review your information before submitting for approval
                     </p>
@@ -676,12 +722,12 @@ export default function ProfileCreationPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted rounded-md">
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Name</p>
+                      <p className="text-xs text-muted-foreground mb-1">Company Name</p>
                       <p className="font-medium">{formData.name || "Not provided"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Title</p>
-                      <p className="font-medium">{formData.title || "Not provided"}</p>
+                      <p className="text-xs text-muted-foreground mb-1">Company Size</p>
+                      <p className="font-medium">{formData.companySize || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Industry</p>
@@ -695,7 +741,7 @@ export default function ProfileCreationPage() {
                       <p className="text-xs text-muted-foreground mb-1">Location</p>
                       <p className="font-medium">
                         {formData.city && formData.country
-                          ? `${formData.city}, ${getCountryName(formData.country)}`
+                          ? `${formData.city}, ${formData.country}`
                           : "Not provided"}
                       </p>
                     </div>
@@ -703,21 +749,13 @@ export default function ProfileCreationPage() {
                       <p className="text-xs text-muted-foreground mb-1">Phone</p>
                       <p className="font-medium">{formData.phone || "Not provided"}</p>
                     </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Collaboration Types</p>
-                      <p className="font-medium">
-                        {formData.collaborationTypes.length > 0
-                          ? formData.collaborationTypes.join(", ")
-                          : "None selected"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground mb-1">Profile Completion</p>
-                      <p className="font-medium">{calculateCompletion()}%</p>
+                    <div className="md:col-span-2">
+                      <p className="text-xs text-muted-foreground mb-1">Description</p>
+                      <p className="font-medium text-sm">{formData.bio || "Not provided"}</p>
                     </div>
                     <div className="md:col-span-2">
-                      <p className="text-xs text-muted-foreground mb-1">About</p>
-                      <p className="font-medium text-sm">{formData.bio || "Not provided"}</p>
+                      <p className="text-xs text-muted-foreground mb-1">Profile Completion</p>
+                      <p className="font-medium">{calculateCompletion()}%</p>
                     </div>
                   </div>
 

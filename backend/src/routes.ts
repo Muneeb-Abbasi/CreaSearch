@@ -50,6 +50,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const filters: ProfileFilters = {
         search: req.query.search as string,
         city: req.query.city as string,
+        country: req.query.country as string,
+        industry: req.query.industry as string,
+        niche: req.query.niche as string,
         minFollowers: req.query.minFollowers ? parseInt(req.query.minFollowers as string) : undefined,
         maxFollowers: req.query.maxFollowers ? parseInt(req.query.maxFollowers as string) : undefined,
         collaborationType: req.query.collaborationType as string,

@@ -8,6 +8,7 @@ import HomePage from "@/pages/HomePage";
 import SearchPage from "@/pages/SearchPage";
 import CreatorProfilePage from "@/pages/CreatorProfilePage";
 import ProfileCreationPage from "@/pages/ProfileCreationPage";
+import BrandProfileCreationPage from "@/pages/BrandProfileCreationPage";
 import AdminDashboardPage from "@/pages/AdminDashboardPage";
 import LoginPage from "@/pages/LoginPage";
 import SuccessStoriesPage from "@/pages/SuccessStoriesPage";
@@ -22,9 +23,11 @@ function Router() {
     <Switch>
       <Route path="/" component={HomePage} />
       <Route path="/login" component={LoginPage} />
+      <Route path="/signup" component={LoginPage} />
       <Route path="/search" component={SearchPage} />
       <Route path="/creator/:id" component={CreatorProfilePage} />
       <Route path="/create-profile" component={ProfileCreationPage} />
+      <Route path="/create-brand-profile" component={BrandProfileCreationPage} />
       <Route path="/admin" component={AdminDashboardPage} />
       <Route path="/success-stories" component={SuccessStoriesPage} />
       <Route path="/about" component={AboutPage} />

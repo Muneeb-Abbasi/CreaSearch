@@ -8,7 +8,12 @@ export interface Profile {
     role: 'creator' | 'organization' | 'admin';
     name: string;
     title: string | null;
-    location: string | null;
+    industry: string; // Required - Primary industry
+    niche: string; // Required - Specific niche/specialization
+    city: string; // Required - City name
+    country: string; // Required - Country code (e.g., 'PK', 'US')
+    phone: string; // Required - Phone number with country code
+    location: string | null; // Kept for backward compatibility
     bio: string | null;
     avatar_url: string | null;
     video_intro_url: string | null;
@@ -28,6 +33,9 @@ export interface Profile {
 export interface ProfileFilters {
     search?: string;
     city?: string;
+    country?: string; // Filter by country code
+    industry?: string; // Filter by industry
+    niche?: string; // Filter by niche
     minFollowers?: number;
     maxFollowers?: number;
     collaborationType?: string;
@@ -86,6 +94,9 @@ export const profileApi = {
         const params = new URLSearchParams();
         if (filters.search) params.set('search', filters.search);
         if (filters.city) params.set('city', filters.city);
+        if (filters.country) params.set('country', filters.country);
+        if (filters.industry) params.set('industry', filters.industry);
+        if (filters.niche) params.set('niche', filters.niche);
         if (filters.minFollowers) params.set('minFollowers', filters.minFollowers.toString());
         if (filters.maxFollowers) params.set('maxFollowers', filters.maxFollowers.toString());
         if (filters.collaborationType) params.set('collaborationType', filters.collaborationType);

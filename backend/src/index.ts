@@ -3,6 +3,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import cors from 'cors';
 import { createServer } from "http";
 import { registerRoutes } from "./routes";
+import { apiRateLimit } from "./middleware/rateLimit";
+import { secureLogger } from "./utils/secureLogger";
 
 const app = express();
 
@@ -19,26 +21,38 @@ app.use(cors({
     if (allowedOrigins.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
       callback(null, true);
     } else {
-      console.log('Blocked by CORS:', origin);
+      secureLogger.warn('CORS blocked request', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true
 }));
 
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // Parse JSON bodies
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
+
+// Apply rate limiting to API routes
+app.use('/api', apiRateLimit);
 
 // Health check endpoint (required for Railway)
 app.get('/health', (_, res) => res.send('ok'));
 
-// Request logging
+// Request logging with secure logger
 app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - start;
-    console.log(`${req.method} ${req.path} ${res.statusCode} in ${duration}ms`);
+    secureLogger.info(`${req.method} ${req.path} ${res.statusCode} in ${duration}ms`);
   });
   next();
 });
@@ -50,7 +64,7 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    console.error('Error:', message);
+    secureLogger.error('Request error', { status, message, stack: err.stack });
     res.status(status).json({ message });
   });
 
@@ -64,6 +78,6 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
   }, () => {
-    console.log(`Backend server running on port ${port}`);
+    secureLogger.info(`Backend server running on port ${port}`);
   });
 })();

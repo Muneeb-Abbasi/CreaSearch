@@ -90,7 +90,7 @@ export function Header() {
                     Log In
                   </Button>
                 </Link>
-                <Link href="/login">
+                <Link href="/signup">
                   <Button className="hidden md:inline-flex" data-testid="button-signup">
                     Sign Up
                   </Button>
@@ -143,7 +143,7 @@ export function Header() {
                         Log In
                       </Button>
                     </Link>
-                    <Link href="/login">
+                    <Link href="/signup">
                       <Button className="w-full" data-testid="button-mobile-signup">
                         Sign Up
                       </Button>

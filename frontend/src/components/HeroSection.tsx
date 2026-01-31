@@ -35,7 +35,7 @@ export function HeroSection() {
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-            <Link href="/login">
+            <Link href="/create-profile">
               <Button
                 size="lg"
                 variant="outline"
@@ -43,6 +43,16 @@ export function HeroSection() {
                 data-testid="button-join-creator"
               >
                 Join as Creator
+              </Button>
+            </Link>
+            <Link href="/create-brand-profile">
+              <Button
+                size="lg"
+                variant="outline"
+                className="text-base bg-white/10 backdrop-blur-sm border-white/30 text-white hover:bg-white/20"
+                data-testid="button-join-brand"
+              >
+                Join as Brand
               </Button>
             </Link>
           </div>

@@ -6,10 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2 } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminApi, profileApi, Profile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { ProfileDetailModal } from "@/components/ProfileDetailModal";
 
 export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -22,6 +23,8 @@ export default function AdminDashboardPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Hardcoded admin emails (can access admin dashboard)
   const ADMIN_EMAILS = [
@@ -198,253 +201,303 @@ export default function AdminDashboardPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <Header />
-      <main className="flex-1 bg-muted/30">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
-          <div className="flex items-center justify-between mb-8">
-            <h1 className="font-heading text-3xl font-bold" data-testid="text-page-title">
-              Admin Dashboard
-            </h1>
-            <Button variant="outline" onClick={fetchPendingProfiles} disabled={isLoading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
+    <>
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-1 bg-muted/30">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
+            <div className="flex items-center justify-between mb-8">
+              <h1 className="font-heading text-3xl font-bold" data-testid="text-page-title">
+                Admin Dashboard
+              </h1>
+              <Button variant="outline" onClick={fetchPendingProfiles} disabled={isLoading}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Pending Verifications</p>
-                    <p className="text-3xl font-bold" data-testid="text-pending-count">
-                      {pendingProfiles.length}
-                    </p>
-                  </div>
-                  <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
-                    <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-500" />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3">
-                  {pendingProfiles.length > 0 ? "Requires attention" : "All caught up!"}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Total Users</p>
-                    <p className="text-3xl font-bold" data-testid="text-total-users">-</p>
-                  </div>
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                    <Users className="w-6 h-6 text-primary" />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  Stats coming soon
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Active Creators</p>
-                    <p className="text-3xl font-bold" data-testid="text-active-creators">-</p>
-                  </div>
-                  <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
-                    <CheckCircle2 className="w-6 h-6 text-green-600 dark:text-green-500" />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  Stats coming soon
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-muted-foreground mb-1">Monthly Revenue</p>
-                    <p className="text-3xl font-bold" data-testid="text-revenue">₨0</p>
-                  </div>
-                  <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-blue-600 dark:text-blue-500" />
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  Coming soon
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Tabs defaultValue="verifications" className="w-full">
-            <TabsList data-testid="tabs-admin">
-              <TabsTrigger value="verifications">
-                Pending Verifications
-                {pendingProfiles.length > 0 && (
-                  <Badge variant="secondary" className="ml-2">{pendingProfiles.length}</Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="users">All Profiles</TabsTrigger>
-              <TabsTrigger value="reports">Reports</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="verifications" className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <Card>
-                <CardHeader>
-                  <CardTitle>Profiles Awaiting Approval</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin" />
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Pending Verifications</p>
+                      <p className="text-3xl font-bold" data-testid="text-pending-count">
+                        {pendingProfiles.length}
+                      </p>
                     </div>
-                  ) : pendingProfiles.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-green-500" />
-                      <p>No pending profiles to review!</p>
+                    <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                      <Clock className="w-6 h-6 text-yellow-600 dark:text-yellow-500" />
                     </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {pendingProfiles.map((profile) => (
-                        <div
-                          key={profile.id}
-                          className="flex items-center justify-between p-4 border rounded-md"
-                          data-testid={`profile-${profile.id}`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <Avatar className="w-12 h-12">
-                              <AvatarImage src={profile.avatar_url || undefined} alt={profile.name} />
-                              <AvatarFallback>{profile.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <h4 className="font-semibold">{profile.name}</h4>
-                              <p className="text-sm text-muted-foreground">
-                                {profile.title || "Creator"} • {profile.location || "Pakistan"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Submitted {formatDate(profile.created_at)}
-                              </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    {pendingProfiles.length > 0 ? "Requires attention" : "All caught up!"}
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Total Users</p>
+                      <p className="text-3xl font-bold" data-testid="text-total-users">-</p>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Users className="w-6 h-6 text-primary" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />
+                    Stats coming soon
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Active Creators</p>
+                      <p className="text-3xl font-bold" data-testid="text-active-creators">-</p>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+                      <CheckCircle2 className="w-6 h-6 text-green-600 dark:text-green-500" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />
+                    Stats coming soon
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground mb-1">Monthly Revenue</p>
+                      <p className="text-3xl font-bold" data-testid="text-revenue">₨0</p>
+                    </div>
+                    <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
+                      <DollarSign className="w-6 h-6 text-blue-600 dark:text-blue-500" />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" />
+                    Coming soon
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Tabs defaultValue="verifications" className="w-full">
+              <TabsList data-testid="tabs-admin">
+                <TabsTrigger value="verifications">
+                  Pending Verifications
+                  {pendingProfiles.length > 0 && (
+                    <Badge variant="secondary" className="ml-2">{pendingProfiles.length}</Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="users">All Profiles</TabsTrigger>
+                <TabsTrigger value="reports">Reports</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="verifications" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Profiles Awaiting Approval</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                      </div>
+                    ) : pendingProfiles.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <CheckCircle2 className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                        <p>No pending profiles to review!</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {pendingProfiles.map((profile) => (
+                          <div
+                            key={profile.id}
+                            className="flex items-center justify-between p-4 border rounded-md"
+                            data-testid={`profile-${profile.id}`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <Avatar className="w-12 h-12">
+                                <AvatarImage src={profile.avatar_url || undefined} alt={profile.name} />
+                                <AvatarFallback>{profile.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <h4 className="font-semibold">{profile.name}</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {profile.title || "Creator"} • {profile.location || "Pakistan"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Submitted {formatDate(profile.created_at)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary">Pending Review</Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedProfile(profile);
+                                  setIsModalOpen(true);
+                                }}
+                                data-testid="button-view-details"
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View
+                              </Button>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleApprove(profile.id)}
+                                disabled={actionLoading === profile.id}
+                                data-testid="button-approve"
+                              >
+                                {actionLoading === profile.id ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  <CheckCircle2 className="w-4 h-4 mr-1" />
+                                )}
+                                Approve
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleReject(profile.id)}
+                                disabled={actionLoading === profile.id}
+                                data-testid="button-reject"
+                              >
+                                {actionLoading === profile.id ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 mr-1" />
+                                )}
+                                Reject
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary">Pending Review</Badge>
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => handleApprove(profile.id)}
-                              disabled={actionLoading === profile.id}
-                              data-testid="button-approve"
-                            >
-                              {actionLoading === profile.id ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <CheckCircle2 className="w-4 h-4 mr-1" />
-                              )}
-                              Approve
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleReject(profile.id)}
-                              disabled={actionLoading === profile.id}
-                              data-testid="button-reject"
-                            >
-                              {actionLoading === profile.id ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <XCircle className="w-4 h-4 mr-1" />
-                              )}
-                              Reject
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-            <TabsContent value="users" className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>All Approved Profiles ({allProfiles.length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {allProfiles.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-8">No approved profiles yet.</p>
-                  ) : (
-                    <div className="space-y-4">
-                      {allProfiles.map((profile) => (
-                        <div
-                          key={profile.id}
-                          className="flex items-center justify-between p-4 border rounded-md"
-                          data-testid={`all-profile-${profile.id}`}
-                        >
-                          <div className="flex items-center gap-4">
-                            <Avatar className="w-12 h-12">
-                              <AvatarImage src={profile.avatar_url || undefined} alt={profile.name} />
-                              <AvatarFallback>{profile.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <h4 className="font-semibold">{profile.name}</h4>
-                              <p className="text-sm text-muted-foreground">
-                                {profile.title || "Creator"} • {profile.location || "Pakistan"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {(profile.follower_total || 0).toLocaleString()} followers
-                              </p>
+              <TabsContent value="users" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>All Approved Profiles ({allProfiles.length})</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {allProfiles.length === 0 ? (
+                      <p className="text-muted-foreground text-center py-8">No approved profiles yet.</p>
+                    ) : (
+                      <div className="space-y-4">
+                        {allProfiles.map((profile) => (
+                          <div
+                            key={profile.id}
+                            className="flex items-center justify-between p-4 border rounded-md"
+                            data-testid={`all-profile-${profile.id}`}
+                          >
+                            <div className="flex items-center gap-4">
+                              <Avatar className="w-12 h-12">
+                                <AvatarImage src={profile.avatar_url || undefined} alt={profile.name} />
+                                <AvatarFallback>{profile.name.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <h4 className="font-semibold">{profile.name}</h4>
+                                <p className="text-sm text-muted-foreground">
+                                  {profile.title || "Creator"} • {profile.location || "Pakistan"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {(profile.follower_total || 0).toLocaleString()} followers
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="default" className="bg-green-500">Approved</Badge>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedProfile(profile);
+                                  setIsModalOpen(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDelete(profile.id)}
+                                disabled={actionLoading === profile.id}
+                                className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                              >
+                                {actionLoading === profile.id ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                )}
+                                Delete
+                              </Button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="default" className="bg-green-500">Approved</Badge>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDelete(profile.id)}
-                              disabled={actionLoading === profile.id}
-                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                            >
-                              {actionLoading === profile.id ? (
-                                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4 mr-1" />
-                              )}
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
-            <TabsContent value="reports" className="mt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Platform Reports</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">Analytics and reports will be displayed here.</p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </main>
-    </div>
+              <TabsContent value="reports" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Platform Reports</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-muted-foreground">Analytics and reports will be displayed here.</p>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </main>
+      </div>
+
+      {/* Profile Detail Modal */}
+      {
+        selectedProfile && (
+          <ProfileDetailModal
+            profile={selectedProfile}
+            isOpen={isModalOpen}
+            onClose={() => {
+              setIsModalOpen(false);
+              setSelectedProfile(null);
+            }}
+            onApprove={async (id) => {
+              await handleApprove(id);
+              setIsModalOpen(false);
+              setSelectedProfile(null);
+            }}
+            onReject={async (id) => {
+              await handleReject(id);
+              setIsModalOpen(false);
+              setSelectedProfile(null);
+            }}
+            isLoading={actionLoading === selectedProfile.id}
+          />
+        )
+      }
+    </>
   );
 }

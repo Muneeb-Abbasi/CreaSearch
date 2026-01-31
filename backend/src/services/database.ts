@@ -27,7 +27,12 @@ export interface Profile {
     role: 'creator' | 'organization' | 'admin';
     name: string;
     title: string | null;
-    location: string | null;
+    industry: string; // Required - Primary industry
+    niche: string; // Required - Specific niche/specialization
+    city: string; // Required - City name
+    country: string; // Required - Country code (e.g., 'PK', 'US')
+    phone: string; // Required - Phone number with country code
+    location: string | null; // Kept for backward compatibility
     bio: string | null;
     avatar_url: string | null;
     video_intro_url: string | null;
@@ -48,6 +53,9 @@ export interface Profile {
 export interface ProfileFilters {
     search?: string;
     city?: string;
+    country?: string; // Filter by country code
+    industry?: string; // Filter by industry
+    niche?: string; // Filter by niche
     minFollowers?: number;
     maxFollowers?: number;
     collaborationType?: string;
@@ -64,11 +72,23 @@ export const profileService = {
             .eq('status', filters.status || 'approved');
 
         if (filters.search) {
-            query = query.or(`name.ilike.%${filters.search}%,title.ilike.%${filters.search}%`);
+            query = query.or(`name.ilike.%${filters.search}%,title.ilike.%${filters.search}%,industry.ilike.%${filters.search}%,niche.ilike.%${filters.search}%`);
+        }
+
+        if (filters.country) {
+            query = query.eq('country', filters.country);
         }
 
         if (filters.city) {
-            query = query.ilike('location', `%${filters.city}%`);
+            query = query.eq('city', filters.city);
+        }
+
+        if (filters.industry) {
+            query = query.eq('industry', filters.industry);
+        }
+
+        if (filters.niche) {
+            query = query.eq('niche', filters.niche);
         }
 
         if (filters.minFollowers) {

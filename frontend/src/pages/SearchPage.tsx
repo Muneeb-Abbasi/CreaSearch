@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/pagination";
 import { Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
 import { profileApi, Profile } from "@/lib/api";
+import { CountrySelect } from "@/components/ui/country-select";
+import { getCountryName } from "@/data/countries-cities";
 import creatorImage1 from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
 import creatorImage2 from "@assets/generated_images/Pakistani_male_creator_headshot_3c6570b2.png";
 import creatorImage3 from "@assets/generated_images/Pakistani_trainer_headshot_b66d573d.png";
@@ -198,6 +200,9 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [selectedCountry, setSelectedCountry] = useState("");
+  const [industryFilter, setIndustryFilter] = useState("");
+  const [nicheFilter, setNicheFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [apiCreators, setApiCreators] = useState<any[]>([]);
@@ -208,18 +213,30 @@ export default function SearchPage() {
     async function fetchProfiles() {
       setIsLoading(true);
       try {
-        const profiles = await profileApi.getAll();
+        const profiles = await profileApi.getAll({
+          search: searchQuery || undefined,
+          country: selectedCountry || undefined,
+          industry: industryFilter || undefined,
+          niche: nicheFilter || undefined,
+          collaborationType: selectedTypes[0] || undefined,
+        });
         // Transform API profiles to match component format
         const transformed = profiles.map((profile: Profile, index: number) => ({
           id: profile.id,
           name: profile.name,
           title: profile.title || "Creator",
-          location: profile.location || "Pakistan",
+          location: profile.city && profile.country
+            ? `${profile.city}, ${getCountryName(profile.country)}`
+            : profile.location || "Pakistan",
           imageUrl: profile.avatar_url || [creatorImage1, creatorImage2, creatorImage3][index % 3],
           score: profile.creasearch_score || 80,
           verified: profile.verified_socials?.length > 0,
           followerCount: profile.follower_total || 0,
           tags: profile.collaboration_types || [],
+          industry: profile.industry,
+          niche: profile.niche,
+          country: profile.country,
+          city: profile.city,
         }));
         setApiCreators(transformed);
       } catch (error) {
@@ -231,7 +248,7 @@ export default function SearchPage() {
       }
     }
     fetchProfiles();
-  }, []);
+  }, [searchQuery, selectedCountry, industryFilter, nicheFilter, selectedTypes]);
 
   // Use API creators if available, otherwise use mock data
   const allCreators = apiCreators.length > 0 ? apiCreators : mockCreators;
@@ -403,6 +420,51 @@ export default function SearchPage() {
 
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">
+                    Country
+                  </Label>
+                  <CountrySelect
+                    value={selectedCountry}
+                    onChange={(value) => {
+                      setSelectedCountry(value);
+                      handleFilterChange();
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">
+                    Industry
+                  </Label>
+                  <Input
+                    placeholder="e.g. Technology, Fashion..."
+                    value={industryFilter}
+                    onChange={(e) => {
+                      setIndustryFilter(e.target.value);
+                      handleFilterChange();
+                    }}
+                    className="text-sm"
+                    data-testid="input-industry"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">
+                    Niche
+                  </Label>
+                  <Input
+                    placeholder="e.g. AI tools, Streetwear..."
+                    value={nicheFilter}
+                    onChange={(e) => {
+                      setNicheFilter(e.target.value);
+                      handleFilterChange();
+                    }}
+                    className="text-sm"
+                    data-testid="input-niche"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-sm font-semibold mb-3 block">
                     Min Followers
                   </Label>
                   <Slider
@@ -429,6 +491,9 @@ export default function SearchPage() {
                     setSearchQuery("");
                     setSelectedTypes([]);
                     setSelectedCities([]);
+                    setSelectedCountry("");
+                    setIndustryFilter("");
+                    setNicheFilter("");
                     setFollowerRange([0]);
                     setCurrentPage(1);
                   }}
