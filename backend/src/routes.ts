@@ -448,6 +448,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/admin/refresh-youtube - Trigger manual YouTube refresh for all profiles
+  app.post("/api/admin/refresh-youtube", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { triggerYouTubeRefresh } = await import("./services/cron");
+      const result = await triggerYouTubeRefresh();
+      res.json({
+        success: true,
+        message: `YouTube refresh complete: ${result.updated}/${result.total} profiles updated`,
+        ...result
+      });
+    } catch (error) {
+      console.error("Error triggering YouTube refresh:", error);
+      res.status(500).json({ error: "Failed to trigger YouTube refresh" });
+    }
+  });
+
+  // GET /api/admin/cron-status - Get cron job status
+  app.get("/api/admin/cron-status", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { getCronStatus } = await import("./services/cron");
+      const status = getCronStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting cron status:", error);
+      res.status(500).json({ error: "Failed to get cron status" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

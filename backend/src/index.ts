@@ -77,7 +77,15 @@ app.use((req, res, next) => {
   httpServer.listen({
     port,
     host: "0.0.0.0",
-  }, () => {
+  }, async () => {
     secureLogger.info(`Backend server running on port ${port}`);
+
+    // Initialize cron jobs for background verification updates
+    try {
+      const { initializeCronJobs } = await import('./services/cron');
+      initializeCronJobs();
+    } catch (error) {
+      secureLogger.error('Failed to initialize cron jobs', { error });
+    }
   });
 })();
