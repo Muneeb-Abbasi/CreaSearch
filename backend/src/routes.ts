@@ -254,6 +254,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============= VERIFICATION ROUTES =============
+
+  // POST /api/verify/youtube - Verify YouTube channel and get subscriber count
+  app.post("/api/verify/youtube", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { channelUrl, profileId } = req.body;
+
+      if (!channelUrl) {
+        return res.status(400).json({ error: "channelUrl is required" });
+      }
+
+      // Dynamic import to avoid loading googleapis on every request
+      const { verifyYouTubeChannel } = await import("./services/youtube");
+      const result = await verifyYouTubeChannel(channelUrl);
+
+      // If profileId is provided, update the profile's social_links
+      if (profileId && result.status === 'VERIFIED') {
+        const profile = await profileService.getById(profileId);
+        if (profile) {
+          const updatedSocialLinks = {
+            ...profile.social_links,
+            youtube: {
+              url: channelUrl,
+              channelId: result.channelId,
+              channelTitle: result.channelTitle,
+              subscribers: result.subscribers,
+              status: result.status,
+              lastUpdated: new Date().toISOString()
+            }
+          };
+          await profileService.update(profileId, { social_links: updatedSocialLinks });
+        }
+      }
+
+      res.json({
+        success: result.status === 'VERIFIED',
+        ...result
+      });
+    } catch (error) {
+      console.error("Error verifying YouTube channel:", error);
+      res.status(500).json({ error: "Failed to verify YouTube channel" });
+    }
+  });
+
+  // GET /api/profiles/:id/verifications - Get verification status for all platforms
+  app.get("/api/profiles/:id/verifications", async (req: Request, res: Response) => {
+    try {
+      const profile = await profileService.getById(req.params.id);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+
+      const verifications = {
+        youtube: profile.social_links?.youtube?.status ? {
+          status: profile.social_links.youtube.status,
+          subscribers: profile.social_links.youtube.subscribers,
+          lastUpdated: profile.social_links.youtube.lastUpdated
+        } : null,
+        instagram: profile.social_links?.instagram?.status ? {
+          status: profile.social_links.instagram.status,
+          followers: profile.social_links.instagram.followers,
+          lastUpdated: profile.social_links.instagram.lastUpdated
+        } : null
+      };
+
+      res.json(verifications);
+    } catch (error) {
+      console.error("Error fetching verification status:", error);
+      res.status(500).json({ error: "Failed to fetch verification status" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

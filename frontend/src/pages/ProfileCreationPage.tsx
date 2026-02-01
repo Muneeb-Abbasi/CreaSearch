@@ -165,9 +165,9 @@ export default function ProfileCreationPage() {
 
     setIsSubmitting(true);
     try {
-      const socialLinks: Record<string, string> = {};
-      if (formData.youtube) socialLinks.youtube = formData.youtube;
-      if (formData.instagram) socialLinks.instagram = formData.instagram;
+      const socialLinks: Record<string, any> = {};
+      if (formData.youtube) socialLinks.youtube = { url: formData.youtube, status: 'PENDING' };
+      if (formData.instagram) socialLinks.instagram = { url: formData.instagram, status: 'PENDING' };
       if (formData.linkedin) socialLinks.linkedin = formData.linkedin;
       if (formData.twitter) socialLinks.twitter = formData.twitter;
 
@@ -190,7 +190,7 @@ export default function ProfileCreationPage() {
         }
       }
 
-      await profileApi.create({
+      const createdProfile = await profileApi.create({
         user_id: user?.id,
         name: formData.name,
         title: formData.title,
@@ -210,6 +210,30 @@ export default function ProfileCreationPage() {
         status: 'pending',
         profile_completion: calculateCompletion(),
       });
+
+      // Verify YouTube channel immediately if provided
+      if (formData.youtube && createdProfile.id) {
+        try {
+          const { verificationApi } = await import("@/lib/api");
+          const ytResult = await verificationApi.verifyYouTube(formData.youtube, createdProfile.id);
+
+          if (ytResult.success) {
+            toast({
+              title: "YouTube Verified!",
+              description: `Channel: ${ytResult.channelTitle} • ${ytResult.subscribers?.toLocaleString()} subscribers`,
+            });
+          } else if (ytResult.status === 'HIDDEN') {
+            toast({
+              title: "YouTube Subscriber Count Hidden",
+              description: "Your channel was found but subscriber count is hidden.",
+              variant: "destructive"
+            });
+          }
+        } catch (ytError) {
+          console.error("YouTube verification failed:", ytError);
+          // Don't block profile creation for verification failure
+        }
+      }
 
       toast({
         title: "Profile submitted!",

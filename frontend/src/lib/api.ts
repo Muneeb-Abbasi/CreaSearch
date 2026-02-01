@@ -222,3 +222,57 @@ export const uploadApi = {
         return response.json();
     },
 };
+
+// YouTube verification result interface
+export interface YouTubeVerificationResult {
+    success: boolean;
+    channelId: string | null;
+    channelTitle: string | null;
+    subscribers: number | null;
+    status: 'VERIFIED' | 'HIDDEN' | 'NOT_FOUND' | 'FAILED';
+    error?: string;
+}
+
+export interface InstagramVerificationResult {
+    success: boolean;
+    username: string | null;
+    followers: number | null;
+    status: 'VALIDATED' | 'PRIVATE' | 'PENDING' | 'FAILED';
+    error?: string;
+}
+
+export interface VerificationStatus {
+    youtube: {
+        status: string;
+        subscribers: number | null;
+        lastUpdated: string;
+    } | null;
+    instagram: {
+        status: string;
+        followers: number | null;
+        lastUpdated: string;
+    } | null;
+}
+
+export const verificationApi = {
+    // Verify YouTube channel
+    async verifyYouTube(channelUrl: string, profileId?: string): Promise<YouTubeVerificationResult> {
+        return fetchWithError<YouTubeVerificationResult>(`${API_BASE}/verify/youtube`, {
+            method: 'POST',
+            body: JSON.stringify({ channelUrl, profileId }),
+        });
+    },
+
+    // Queue Instagram verification (background processing)
+    async verifyInstagram(profileUrl: string, profileId?: string): Promise<InstagramVerificationResult> {
+        return fetchWithError<InstagramVerificationResult>(`${API_BASE}/verify/instagram`, {
+            method: 'POST',
+            body: JSON.stringify({ profileUrl, profileId }),
+        });
+    },
+
+    // Get verification status for a profile
+    async getStatus(profileId: string): Promise<VerificationStatus> {
+        return fetchWithError<VerificationStatus>(`${API_BASE}/profiles/${profileId}/verifications`);
+    },
+};
