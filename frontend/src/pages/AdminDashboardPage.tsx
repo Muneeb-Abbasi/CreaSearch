@@ -6,11 +6,61 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle } from "lucide-react";
+import { SiYoutube, SiInstagram } from "react-icons/si";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminApi, profileApi, Profile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileDetailModal } from "@/components/ProfileDetailModal";
+
+// Helper to get verification status badge
+function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Record<string, any>) {
+  const link = socialLinks?.[platform];
+  if (!link) return null;
+
+  const status = typeof link === 'object' ? link.status : null;
+  const count = typeof link === 'object' ? (link.subscribers || link.followers) : null;
+
+  if (status === 'VERIFIED' || status === 'VALIDATED') {
+    return (
+      <Badge variant="default" className="bg-green-500 text-xs">
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        {count ? `${count >= 1000 ? `${(count / 1000).toFixed(0)}K` : count}` : '✓'}
+      </Badge>
+    );
+  }
+  if (status === 'PENDING') {
+    return (
+      <Badge variant="secondary" className="text-xs">
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        Pending
+      </Badge>
+    );
+  }
+  if (status === 'HIDDEN' || status === 'PRIVATE') {
+    return (
+      <Badge variant="outline" className="text-xs">
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        Hidden
+      </Badge>
+    );
+  }
+  if (status === 'FAILED' || status === 'NOT_FOUND') {
+    return (
+      <Badge variant="destructive" className="text-xs">
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        Failed
+      </Badge>
+    );
+  }
+  // Has link but no status (legacy)
+  return (
+    <Badge variant="outline" className="text-xs">
+      {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+      Unverified
+    </Badge>
+  );
+}
 
 export default function AdminDashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -21,6 +71,7 @@ export default function AdminDashboardPage() {
   const [allProfiles, setAllProfiles] = useState<Profile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [verifyLoading, setVerifyLoading] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
@@ -192,6 +243,51 @@ export default function AdminDashboardPage() {
     return date.toLocaleDateString();
   };
 
+  // Admin manual Instagram verification
+  const handleVerifyInstagram = async (profileId: string) => {
+    setVerifyLoading(profileId);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+      const { data: session } = await import('@/lib/supabase').then(m => m.supabase.auth.getSession());
+      const token = session?.session?.access_token;
+
+      const response = await fetch(`${API_BASE}/admin/verify-instagram-now/${profileId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Instagram Verified!",
+          description: `${result.username}: ${result.followers?.toLocaleString()} followers`
+        });
+        // Refresh profiles to show updated data
+        fetchPendingProfiles();
+        fetchAllProfiles();
+      } else {
+        toast({
+          title: "Verification Failed",
+          description: result.error || "Could not verify Instagram profile",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying Instagram:", error);
+      toast({
+        title: "Error",
+        description: "Failed to verify Instagram",
+        variant: "destructive"
+      });
+    } finally {
+      setVerifyLoading(null);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -341,7 +437,32 @@ export default function AdminDashboardPage() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Verification Status Badges */}
+                              {profile.social_links?.youtube && getVerificationBadge('youtube', profile.social_links)}
+                              {profile.social_links?.instagram && getVerificationBadge('instagram', profile.social_links)}
+
+                              {/* Verify Instagram Button (if pending or failed) */}
+                              {profile.social_links?.instagram && (
+                                typeof profile.social_links.instagram !== 'string' &&
+                                ['PENDING', 'FAILED', undefined].includes(profile.social_links.instagram.status)
+                              ) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleVerifyInstagram(profile.id)}
+                                    disabled={verifyLoading === profile.id}
+                                    className="text-xs"
+                                  >
+                                    {verifyLoading === profile.id ? (
+                                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    ) : (
+                                      <SiInstagram className="w-3 h-3 mr-1" />
+                                    )}
+                                    Verify IG
+                                  </Button>
+                                )}
+
                               <Badge variant="secondary">Pending Review</Badge>
                               <Button
                                 variant="outline"
@@ -423,7 +544,11 @@ export default function AdminDashboardPage() {
                                 </p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Verification Status Badges */}
+                              {profile.social_links?.youtube && getVerificationBadge('youtube', profile.social_links)}
+                              {profile.social_links?.instagram && getVerificationBadge('instagram', profile.social_links)}
+
                               <Badge variant="default" className="bg-green-500">Approved</Badge>
                               <Button
                                 variant="outline"
