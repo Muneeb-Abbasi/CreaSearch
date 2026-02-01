@@ -326,6 +326,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/verify/instagram - Queue Instagram verification (background processing)
+  app.post("/api/verify/instagram", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { profileUrl, profileId, immediate } = req.body;
+
+      if (!profileUrl) {
+        return res.status(400).json({ error: "profileUrl is required" });
+      }
+
+      // Dynamic import
+      const { verifyInstagramProfile, extractInstagramUsername, queueInstagramVerification } =
+        await import("./services/instagram");
+
+      // If immediate verification is requested (admin use only, consumes quota)
+      if (immediate) {
+        const result = await verifyInstagramProfile(profileUrl);
+
+        // Update profile if profileId provided and verification succeeded
+        if (profileId && result.status === 'VALIDATED') {
+          const profile = await profileService.getById(profileId);
+          if (profile) {
+            const updatedSocialLinks = {
+              ...profile.social_links,
+              instagram: {
+                url: profileUrl,
+                username: result.username,
+                followers: result.followers,
+                following: result.following,
+                posts: result.posts,
+                fullName: result.fullName,
+                status: result.status,
+                lastUpdated: new Date().toISOString()
+              }
+            };
+            await profileService.update(profileId, { social_links: updatedSocialLinks });
+          }
+        }
+
+        return res.json({
+          success: result.status === 'VALIDATED',
+          ...result
+        });
+      }
+
+      // Default: Queue for background processing (respects quota limits)
+      const username = extractInstagramUsername(profileUrl);
+
+      // Mark as PENDING in profile
+      if (profileId) {
+        const profile = await profileService.getById(profileId);
+        if (profile) {
+          const updatedSocialLinks = {
+            ...profile.social_links,
+            instagram: {
+              url: profileUrl,
+              username,
+              status: 'PENDING',
+              queuedAt: new Date().toISOString()
+            }
+          };
+          await profileService.update(profileId, { social_links: updatedSocialLinks });
+        }
+      }
+
+      const queueResult = await queueInstagramVerification(profileId || '', profileUrl);
+
+      res.json({
+        success: true,
+        queued: queueResult.queued,
+        message: queueResult.message,
+        username,
+        status: 'PENDING'
+      });
+    } catch (error) {
+      console.error("Error processing Instagram verification:", error);
+      res.status(500).json({ error: "Failed to process Instagram verification" });
+    }
+  });
+
+  // POST /api/admin/verify-instagram-now/:id - Admin: Force immediate Instagram verification
+  app.post("/api/admin/verify-instagram-now/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const profile = await profileService.getById(req.params.id);
+      if (!profile) {
+        return res.status(404).json({ error: "Profile not found" });
+      }
+
+      const instagramUrl = profile.social_links?.instagram?.url || profile.social_links?.instagram;
+      if (!instagramUrl) {
+        return res.status(400).json({ error: "Profile has no Instagram link" });
+      }
+
+      const { verifyInstagramProfile } = await import("./services/instagram");
+      const result = await verifyInstagramProfile(typeof instagramUrl === 'string' ? instagramUrl : instagramUrl.url);
+
+      if (result.status === 'VALIDATED') {
+        const updatedSocialLinks = {
+          ...profile.social_links,
+          instagram: {
+            url: typeof instagramUrl === 'string' ? instagramUrl : instagramUrl.url,
+            username: result.username,
+            followers: result.followers,
+            following: result.following,
+            posts: result.posts,
+            fullName: result.fullName,
+            status: result.status,
+            lastUpdated: new Date().toISOString()
+          }
+        };
+        await profileService.update(req.params.id, { social_links: updatedSocialLinks });
+      }
+
+      res.json({
+        success: result.status === 'VALIDATED',
+        ...result
+      });
+    } catch (error) {
+      console.error("Error verifying Instagram:", error);
+      res.status(500).json({ error: "Failed to verify Instagram" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

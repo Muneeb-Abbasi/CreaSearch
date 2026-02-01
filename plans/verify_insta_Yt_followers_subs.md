@@ -301,8 +301,8 @@ cron.schedule('0 0 * * *', async () => {
 ## Confirmed Decisions
 
 ### 1. API Integration Approach
-- **YouTube**: Rewrite in TypeScript (simple API calls)
-- **Instagram**: Call Python scripts via `child_process.spawn()` (complex Apify integration)
+- **YouTube**: Rewrite in TypeScript (simple API calls) ✅
+- **Instagram**: Rewrite in TypeScript using Apify API directly (consistent with YouTube)
 
 ### 2. Real-time vs Background Verification
 - **YouTube**: Verify immediately on profile creation (blocks 2-3 seconds)

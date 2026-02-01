@@ -18,7 +18,7 @@ export interface Profile {
     avatar_url: string | null;
     video_intro_url: string | null;
     collaboration_types: string[];
-    social_links: Record<string, string>;
+    social_links: Record<string, any>; // Can be string URL or verification data object
     follower_total: number;
     verified_socials: string[];
     profile_completion: number;

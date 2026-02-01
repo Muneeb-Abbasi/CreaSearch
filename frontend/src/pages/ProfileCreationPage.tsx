@@ -235,6 +235,21 @@ export default function ProfileCreationPage() {
         }
       }
 
+      // Queue Instagram verification if provided (background processing)
+      if (formData.instagram && createdProfile.id) {
+        try {
+          const { verificationApi } = await import("@/lib/api");
+          await verificationApi.verifyInstagram(formData.instagram, createdProfile.id);
+          toast({
+            title: "Instagram Queued",
+            description: "Your Instagram will be verified within 24 hours.",
+          });
+        } catch (igError) {
+          console.error("Instagram queue failed:", igError);
+          // Don't block profile creation
+        }
+      }
+
       toast({
         title: "Profile submitted!",
         description: "Your profile is pending review. We'll notify you once approved.",
