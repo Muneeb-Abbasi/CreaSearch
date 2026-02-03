@@ -123,14 +123,17 @@ export const profileService = {
 
     async getByUserId(userId: string): Promise<Profile | null> {
         const supabase = getSupabaseClient();
+        // Order by status to prioritize approved profiles when user has multiple
+        // Status order: approved > pending > rejected
         const { data, error } = await supabase
             .from('profiles')
             .select('*')
             .eq('user_id', userId)
-            .single();
+            .order('status', { ascending: true }) // 'approved' comes before 'pending' and 'rejected' alphabetically
+            .limit(1)
+            .maybeSingle();
 
-        // PGRST116 = no rows returned, which is not an error for us
-        if (error && error.code !== 'PGRST116') throw error;
+        if (error) throw error;
         return data;
     },
 
