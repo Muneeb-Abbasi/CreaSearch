@@ -1,10 +1,4 @@
-Here’s a **sharp, no-nonsense prompt** you can paste directly into **Antigravity / Opus 4.5**.
 
-This is written to **force the model to act**, not hallucinate or refactor blindly.
-
----
-
-### 🔥 PROMPT (copy-paste as is)
 
 > You are a senior full-stack engineer and DevOps architect.
 >
