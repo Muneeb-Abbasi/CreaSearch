@@ -140,10 +140,10 @@ export default function ProfileCreationPage() {
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > 2 * 1024 * 1024) {
         toast({
           title: "File too large",
-          description: "Please select an image under 5MB",
+          description: "Please select an image under 2MB",
           variant: "destructive"
         });
         return;
@@ -158,6 +158,26 @@ export default function ProfileCreationPage() {
   };
 
   const handleSubmit = async () => {
+    // Check required photo
+    if (!photoFile) {
+      toast({
+        title: "Photo required",
+        description: "Please upload a profile photo before submitting",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check required YouTube URL
+    if (!formData.youtube) {
+      toast({
+        title: "YouTube video required",
+        description: "Please provide a YouTube video introduction URL",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.agreedToTerms) {
       toast({
         title: "Please agree to terms",
@@ -542,14 +562,20 @@ export default function ProfileCreationPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="bio">About You *</Label>
+                  <div className="flex justify-between">
+                    <Label htmlFor="bio">About You *</Label>
+                    <span className={`text-xs ${formData.bio.length > 2600 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      {formData.bio.length}/2600
+                    </span>
+                  </div>
                   <Textarea
                     id="bio"
                     placeholder="Tell us about your experience and what makes you unique..."
                     rows={6}
                     value={formData.bio}
-                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, bio: e.target.value.slice(0, 2600) })}
                     data-testid="textarea-bio"
+                    maxLength={2600}
                   />
                 </div>
 

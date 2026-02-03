@@ -156,10 +156,10 @@ export default function BrandProfileCreationPage() {
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
+      if (file.size > 2 * 1024 * 1024) {
         toast({
           title: "File too large",
-          description: "Please select an image under 5MB",
+          description: "Please select an image under 2MB",
           variant: "destructive"
         });
         return;
@@ -201,6 +201,26 @@ export default function BrandProfileCreationPage() {
       });
       const firstErrorField = Object.keys(allErrors)[0];
       document.getElementById(firstErrorField)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    // Check required logo
+    if (!logoFile) {
+      toast({
+        title: "Logo required",
+        description: "Please upload a company logo before submitting",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check required website
+    if (!formData.website) {
+      toast({
+        title: "Website required",
+        description: "Please provide your company website URL",
+        variant: "destructive"
+      });
       return;
     }
 

@@ -26,6 +26,7 @@ export default function CreatorProfilePage() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [userHasApprovedProfile, setUserHasApprovedProfile] = useState(false);
+  const [userHasReviewed, setUserHasReviewed] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -54,6 +55,11 @@ export default function CreatorProfilePage() {
       try {
         const data = await reviewsApi.getByProfileId(profile.id);
         setReviews(data);
+        // Check if current user already reviewed this profile
+        if (user?.id) {
+          const hasReviewed = data.some(r => r.from_user_id === user.id);
+          setUserHasReviewed(hasReviewed);
+        }
       } catch (err) {
         console.error("Error fetching reviews:", err);
       } finally {
@@ -61,7 +67,7 @@ export default function CreatorProfilePage() {
       }
     }
     fetchReviews();
-  }, [profile?.id]);
+  }, [profile?.id, user?.id]);
 
   // Check if current user has an approved profile (can leave reviews)
   useEffect(() => {
@@ -83,6 +89,7 @@ export default function CreatorProfilePage() {
   // Handle new review submission
   const handleReviewSubmitted = (newReview: Review) => {
     setReviews(prev => [newReview, ...prev]);
+    setUserHasReviewed(true); // Hide form after submission
   };
 
   if (isLoading) {
@@ -232,13 +239,19 @@ export default function CreatorProfilePage() {
                 </TabsContent>
 
                 <TabsContent value="reviews" className="space-y-6 mt-6">
-                  {/* Review Form - only for verified users */}
-                  {user && profile?.user_id !== user.id && (
+                  {/* Review Form - only for verified users who haven't reviewed yet */}
+                  {user && profile?.user_id !== user.id && !userHasReviewed && (
                     <ReviewForm
                       profileId={profile.id}
                       onReviewSubmitted={handleReviewSubmitted}
                       userHasProfile={userHasApprovedProfile}
                     />
+                  )}
+                  {/* Show message if already reviewed */}
+                  {userHasReviewed && (
+                    <div className="bg-muted/50 rounded-lg p-4 text-center text-muted-foreground">
+                      You have already reviewed this profile.
+                    </div>
                   )}
 
                   {/* Reviews List */}

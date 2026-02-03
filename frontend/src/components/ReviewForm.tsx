@@ -89,8 +89,8 @@ export function ReviewForm({ profileId, onReviewSubmitted, userHasProfile }: Rev
                             >
                                 <Star
                                     className={`w-7 h-7 ${star <= (hoverRating || rating)
-                                            ? "fill-yellow-400 text-yellow-400"
-                                            : "text-muted-foreground"
+                                        ? "fill-yellow-400 text-yellow-400"
+                                        : "text-muted-foreground"
                                         }`}
                                 />
                             </button>
@@ -100,13 +100,19 @@ export function ReviewForm({ profileId, onReviewSubmitted, userHasProfile }: Rev
 
                 {/* Comment */}
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Comment (optional)</label>
+                    <div className="flex justify-between">
+                        <label className="text-sm font-medium">Comment (optional)</label>
+                        <span className={`text-xs ${comment.length > 500 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                            {comment.length}/500
+                        </span>
+                    </div>
                     <Textarea
                         placeholder="Share your experience working with this creator..."
                         value={comment}
-                        onChange={(e) => setComment(e.target.value)}
+                        onChange={(e) => setComment(e.target.value.slice(0, 500))}
                         rows={3}
                         disabled={isSubmitting}
+                        maxLength={500}
                     />
                 </div>
 
