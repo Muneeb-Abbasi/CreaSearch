@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { profileService, reviewService, ProfileFilters } from "./services/database";
+import { profileService, reviewService, scoringService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
 import { requireAuth } from "./middleware/auth";
@@ -96,6 +96,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       const profile = await profileService.create(profileData);
+
+      // Calculate initial Creasearch score
+      await scoringService.updateProfileScore(profile.id);
+
       res.status(201).json(profile);
     } catch (error) {
       console.error("Error creating profile:", error);
@@ -121,6 +125,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const profile = await profileService.update(profileId, req.body);
+
+      // Recalculate Creasearch score after update
+      await scoringService.updateProfileScore(profileId);
+
       res.json(profile);
     } catch (error) {
       console.error("Error updating profile:", error);
@@ -167,6 +175,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/approve/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const profile = await profileService.approve(req.params.id);
+
+      // Recalculate Creasearch score after approval
+      await scoringService.updateProfileScore(profile.id);
+
       emailService.sendProfileApprovedEmail(profile.user_id, profile.name)
         .catch(err => console.error('[Email] Failed to send approval email:', err));
       res.json(profile);

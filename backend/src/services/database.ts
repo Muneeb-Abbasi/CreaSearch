@@ -320,6 +320,9 @@ export const reviewService = {
                 .update({ rating_score: Math.round(avgRating * 100) / 100 })
                 .eq('id', profileId);
         }
+
+        // Update Creasearch score after rating change
+        await scoringService.updateProfileScore(profileId);
     },
 
     async delete(reviewId: string, userId: string): Promise<void> {
@@ -343,5 +346,108 @@ export const reviewService = {
             .eq('id', reviewId);
 
         if (error) throw error;
+    }
+};
+
+// Scoring Service - Calculates and updates Creasearch Score
+export const scoringService = {
+    /**
+     * Calculate Creasearch Score (0-100) based on 4 factors:
+     * 1. Profile Completion (30 pts)
+     * 2. Social Verification (20 pts) - YouTube & Instagram only
+     * 3. Follower Count (25 pts) - From verified accounts
+     * 4. Reputation (25 pts) - Reviews
+     */
+    calculateScore(profile: Profile, reviewCount: number = 0): number {
+        let score = 0;
+
+        // 1. Profile Completion (Max 30 points)
+        if (profile.name) score += 2;
+        if (profile.title) score += 2;
+        if (profile.industry) score += 2;
+        if (profile.niche) score += 2;
+        if (profile.city) score += 1.5;
+        if (profile.country) score += 1.5;
+        if (profile.phone) score += 2;
+        if (profile.bio && profile.bio.length >= 100) score += 5;
+        if (profile.avatar_url) score += 6;
+        if (profile.video_intro_url) score += 6;
+
+        // 2. Social Verification (Max 20 points) - YouTube & Instagram only
+        const socialLinks = profile.social_links || {};
+        if (socialLinks.youtube?.status === 'VERIFIED') score += 10;
+        if (socialLinks.instagram?.status === 'VALIDATED') score += 10;
+
+        // 3. Follower Count (Max 25 points) - From verified accounts
+        const followers = profile.follower_total || 0;
+        if (followers >= 500000) score += 25;
+        else if (followers >= 100000) score += 20;
+        else if (followers >= 50000) score += 15;
+        else if (followers >= 10000) score += 10;
+        else if (followers >= 1000) score += 5;
+
+        // 4. Reputation (Max 25 points) - Reviews
+        const avgRating = profile.rating_score || 0;
+        const ratingPoints = Math.min(avgRating * 4, 20); // Max 20 from rating (5 stars × 4)
+        const reviewPoints = Math.min(reviewCount / 2, 5); // Max 5 from review count
+        score += ratingPoints + reviewPoints;
+
+        return Math.round(Math.min(score, 100)); // Cap at 100
+    },
+
+    async updateProfileScore(profileId: string): Promise<number> {
+        const supabase = getSupabaseClient();
+
+        // Fetch profile
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', profileId)
+            .single();
+
+        if (profileError || !profile) {
+            console.error('Error fetching profile for scoring:', profileError);
+            return 0;
+        }
+
+        // Count reviews
+        const { count: reviewCount } = await supabase
+            .from('reviews')
+            .select('*', { count: 'exact', head: true })
+            .eq('profile_id', profileId);
+
+        // Calculate score
+        const newScore = this.calculateScore(profile, reviewCount || 0);
+
+        // Update profile
+        const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ creasearch_score: newScore })
+            .eq('id', profileId);
+
+        if (updateError) {
+            console.error('Error updating creasearch score:', updateError);
+        }
+
+        return newScore;
+    },
+
+    async recalculateAllScores(): Promise<void> {
+        const supabase = getSupabaseClient();
+
+        const { data: profiles, error } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('status', 'approved');
+
+        if (error || !profiles) {
+            console.error('Error fetching profiles for recalculation:', error);
+            return;
+        }
+
+        for (const profile of profiles) {
+            await this.updateProfileScore(profile.id);
+        }
+        console.log(`[Scoring] Recalculated scores for ${profiles.length} profiles`);
     }
 };
