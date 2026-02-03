@@ -56,7 +56,6 @@ export default function ProfileCreationPage() {
     country: "",
     phone: "",
     bio: "",
-    followerCount: "",
     collaborationTypes: [] as string[],
     videoIntroUrl: "",
     youtube: "",
@@ -226,7 +225,7 @@ export default function ProfileCreationPage() {
         location: `${formData.city}, ${getCountryName(formData.country)}`, // Backward compatibility
         bio: formData.bio,
         avatar_url: avatarUrl,
-        follower_total: formData.followerCount ? parseInt(formData.followerCount) : 0,
+        follower_total: 0, // Auto-calculated from verified accounts
         collaboration_types: formData.collaborationTypes,
         video_intro_url: formData.videoIntroUrl || null,
         social_links: socialLinks,
@@ -381,7 +380,6 @@ export default function ProfileCreationPage() {
                         country: existingProfile.country || "",
                         phone: existingProfile.phone || "",
                         bio: existingProfile.bio || "",
-                        followerCount: existingProfile.follower_total?.toString() || "",
                         collaborationTypes: existingProfile.collaboration_types || [],
                         videoIntroUrl: existingProfile.video_intro_url || "",
                         youtube: existingProfile.social_links?.youtube || "",
@@ -548,18 +546,7 @@ export default function ProfileCreationPage() {
                   <p className="text-xs text-muted-foreground">Include country code (e.g., +92 for Pakistan)</p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="followerCount">Total Followers/Subscribers</Label>
-                  <Input
-                    id="followerCount"
-                    type="number"
-                    placeholder="e.g., 50000"
-                    value={formData.followerCount}
-                    onChange={(e) => setFormData({ ...formData, followerCount: e.target.value })}
-                    data-testid="input-follower-count"
-                  />
-                  <p className="text-xs text-muted-foreground">Combined followers across all your platforms</p>
-                </div>
+
 
                 <div className="space-y-2">
                   <div className="flex justify-between">
