@@ -24,6 +24,10 @@ import {
   validatePhone,
   validateCountry,
   validateCity,
+  validateInstagramUrl,
+  validateYouTubeUrl,
+  validateLinkedInUrl,
+  validateTwitterUrl,
   ValidationResult
 } from "@/utils/validation";
 
@@ -650,9 +654,14 @@ export default function ProfileCreationPage() {
                       id="youtube"
                       placeholder="https://youtube.com/@username"
                       value={formData.youtube}
-                      onChange={(e) => setFormData({ ...formData, youtube: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, youtube: e.target.value });
+                        const result = validateYouTubeUrl(e.target.value);
+                        setErrors(prev => ({ ...prev, youtube: result.error || '' }));
+                      }}
                       data-testid="input-youtube"
                     />
+                    {errors.youtube && <p className="text-xs text-red-500">{errors.youtube}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -661,9 +670,14 @@ export default function ProfileCreationPage() {
                       id="instagram"
                       placeholder="https://instagram.com/username"
                       value={formData.instagram}
-                      onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, instagram: e.target.value });
+                        const result = validateInstagramUrl(e.target.value);
+                        setErrors(prev => ({ ...prev, instagram: result.error || '' }));
+                      }}
                       data-testid="input-instagram"
                     />
+                    {errors.instagram && <p className="text-xs text-red-500">{errors.instagram}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -672,9 +686,14 @@ export default function ProfileCreationPage() {
                       id="linkedin"
                       placeholder="https://linkedin.com/in/username"
                       value={formData.linkedin}
-                      onChange={(e) => setFormData({ ...formData, linkedin: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, linkedin: e.target.value });
+                        const result = validateLinkedInUrl(e.target.value);
+                        setErrors(prev => ({ ...prev, linkedin: result.error || '' }));
+                      }}
                       data-testid="input-linkedin"
                     />
+                    {errors.linkedin && <p className="text-xs text-red-500">{errors.linkedin}</p>}
                   </div>
 
                   <div className="space-y-2">
@@ -683,9 +702,14 @@ export default function ProfileCreationPage() {
                       id="twitter"
                       placeholder="https://twitter.com/username"
                       value={formData.twitter}
-                      onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, twitter: e.target.value });
+                        const result = validateTwitterUrl(e.target.value);
+                        setErrors(prev => ({ ...prev, twitter: result.error || '' }));
+                      }}
                       data-testid="input-twitter"
                     />
+                    {errors.twitter && <p className="text-xs text-red-500">{errors.twitter}</p>}
                   </div>
                 </div>
 

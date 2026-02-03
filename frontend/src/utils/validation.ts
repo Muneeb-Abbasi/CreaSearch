@@ -157,3 +157,67 @@ export function validateFollowerCount(count: string): ValidationResult {
   }
   return { isValid: true };
 }
+
+// Instagram URL validation
+export function validateInstagramUrl(url: string): ValidationResult {
+  if (!url.trim()) {
+    return { isValid: true }; // Optional
+  }
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.match(/^(www\.)?instagram\.com$/i)) {
+      return { isValid: false, error: "Please enter a valid Instagram URL (instagram.com)" };
+    }
+    return { isValid: true };
+  } catch {
+    return { isValid: false, error: "Please enter a valid Instagram URL" };
+  }
+}
+
+// YouTube URL validation
+export function validateYouTubeUrl(url: string): ValidationResult {
+  if (!url.trim()) {
+    return { isValid: true }; // Optional
+  }
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.match(/^(www\.)?(youtube\.com|youtu\.be)$/i)) {
+      return { isValid: false, error: "Please enter a valid YouTube URL (youtube.com)" };
+    }
+    return { isValid: true };
+  } catch {
+    return { isValid: false, error: "Please enter a valid YouTube URL" };
+  }
+}
+
+// LinkedIn URL validation
+export function validateLinkedInUrl(url: string): ValidationResult {
+  if (!url.trim()) {
+    return { isValid: true }; // Optional
+  }
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.match(/^(www\.)?linkedin\.com$/i)) {
+      return { isValid: false, error: "Please enter a valid LinkedIn URL (linkedin.com)" };
+    }
+    return { isValid: true };
+  } catch {
+    return { isValid: false, error: "Please enter a valid LinkedIn URL" };
+  }
+}
+
+// Twitter/X URL validation
+export function validateTwitterUrl(url: string): ValidationResult {
+  if (!url.trim()) {
+    return { isValid: true }; // Optional
+  }
+  try {
+    const parsed = new URL(url);
+    if (!parsed.hostname.match(/^(www\.)?(twitter\.com|x\.com)$/i)) {
+      return { isValid: false, error: "Please enter a valid Twitter/X URL (twitter.com or x.com)" };
+    }
+    return { isValid: true };
+  } catch {
+    return { isValid: false, error: "Please enter a valid Twitter/X URL" };
+  }
+}

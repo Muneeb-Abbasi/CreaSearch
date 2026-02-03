@@ -100,11 +100,15 @@ export function ProfileDetailModal({
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-2">Social Media Links</p>
               <div className="space-y-1">
-                {Object.entries(profile.social_links).map(([platform, url]) => (
-                  <a key={platform} href={url} target="_blank" rel="noopener noreferrer" className="block text-primary hover:underline">
-                    {platform.charAt(0).toUpperCase() + platform.slice(1)}: {url}
-                  </a>
-                ))}
+                {Object.entries(profile.social_links).map(([platform, value]) => {
+                  const url = typeof value === 'string' ? value : value?.url;
+                  if (!url) return null;
+                  return (
+                    <a key={platform} href={url} target="_blank" rel="noopener noreferrer" className="block text-primary hover:underline">
+                      {platform.charAt(0).toUpperCase() + platform.slice(1)}: {url}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}
