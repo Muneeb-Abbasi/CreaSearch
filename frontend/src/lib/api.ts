@@ -276,3 +276,31 @@ export const verificationApi = {
         return fetchWithError<VerificationStatus>(`${API_BASE}/profiles/${profileId}/verifications`);
     },
 };
+
+// Review interface
+export interface Review {
+    id: string;
+    profile_id: string;
+    from_user_id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    reviewer_name: string;
+    reviewer_avatar: string | null;
+}
+
+// Reviews API
+export const reviewsApi = {
+    // Get all reviews for a profile
+    async getByProfileId(profileId: string): Promise<Review[]> {
+        return fetchWithError<Review[]>(`${API_BASE}/reviews/${profileId}`);
+    },
+
+    // Create a new review (requires auth + approved profile)
+    async create(review: { profile_id: string; rating: number; comment?: string }): Promise<Review> {
+        return fetchWithError<Review>(`${API_BASE}/reviews`, {
+            method: 'POST',
+            body: JSON.stringify(review),
+        });
+    },
+};

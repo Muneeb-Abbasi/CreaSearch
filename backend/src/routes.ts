@@ -1,10 +1,11 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { profileService, ProfileFilters } from "./services/database";
+import { profileService, reviewService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
 import { requireAuth } from "./middleware/auth";
+
 
 // Configure multer for file uploads
 const upload = multer({
@@ -198,6 +199,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting profile:", error);
       res.status(500).json({ error: "Failed to delete profile" });
+    }
+  });
+
+  // ============= REVIEWS ROUTES =============
+
+  // GET /api/reviews/:profileId - Get all reviews for a profile (public)
+  app.get("/api/reviews/:profileId", async (req: Request, res: Response) => {
+    try {
+      const reviews = await reviewService.getByProfileId(req.params.profileId);
+      res.json(reviews);
+    } catch (error) {
+      console.error("Error fetching reviews:", error);
+      res.status(500).json({ error: "Failed to fetch reviews" });
+    }
+  });
+
+  // POST /api/reviews - Create a new review (requires auth + approved profile)
+  app.post("/api/reviews", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { profile_id, rating, comment } = req.body;
+      const userId = req.user.id;
+
+      if (!profile_id || !rating) {
+        return res.status(400).json({ error: "profile_id and rating are required" });
+      }
+
+      if (rating < 1 || rating > 5) {
+        return res.status(400).json({ error: "Rating must be between 1 and 5" });
+      }
+
+      const review = await reviewService.create({
+        profile_id,
+        from_user_id: userId,
+        rating,
+        comment: comment || null
+      });
+
+      res.status(201).json(review);
+    } catch (error: any) {
+      console.error("Error creating review:", error);
+      // Return user-friendly error messages
+      if (error.message.includes('Only verified users')) {
+        return res.status(403).json({ error: error.message });
+      }
+      if (error.message.includes('cannot review your own')) {
+        return res.status(400).json({ error: error.message });
+      }
+      if (error.message.includes('already reviewed')) {
+        return res.status(409).json({ error: error.message });
+      }
+      res.status(500).json({ error: "Failed to create review" });
     }
   });
 

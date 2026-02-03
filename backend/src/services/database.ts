@@ -198,3 +198,147 @@ export const profileService = {
         return this.update(id, { status: 'rejected' });
     }
 };
+
+// Review type
+export interface Review {
+    id: string;
+    profile_id: string;
+    from_user_id: string;
+    rating: number;
+    comment: string | null;
+    created_at: string;
+    reviewer_name?: string; // Joined from profiles
+    reviewer_avatar?: string; // Joined from profiles
+}
+
+// Database service for reviews
+export const reviewService = {
+    async getByProfileId(profileId: string): Promise<Review[]> {
+        const supabase = getSupabaseClient();
+
+        // Get reviews and join with profiles to get reviewer info
+        const { data: reviews, error } = await supabase
+            .from('reviews')
+            .select('*')
+            .eq('profile_id', profileId)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        // Get reviewer profiles for display names
+        if (reviews && reviews.length > 0) {
+            const userIds = [...new Set(reviews.map(r => r.from_user_id))];
+            const { data: reviewerProfiles } = await supabase
+                .from('profiles')
+                .select('user_id, name, avatar_url')
+                .in('user_id', userIds);
+
+            const profileMap = new Map(reviewerProfiles?.map(p => [p.user_id, p]) || []);
+
+            return reviews.map(review => ({
+                ...review,
+                reviewer_name: profileMap.get(review.from_user_id)?.name || 'Anonymous',
+                reviewer_avatar: profileMap.get(review.from_user_id)?.avatar_url || null
+            }));
+        }
+
+        return reviews || [];
+    },
+
+    async create(review: { profile_id: string; from_user_id: string; rating: number; comment?: string }): Promise<Review> {
+        const supabase = getSupabaseClient();
+
+        // Check if reviewer has an approved profile (verified user)
+        const { data: reviewerProfile, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, status')
+            .eq('user_id', review.from_user_id)
+            .single();
+
+        if (profileError && profileError.code !== 'PGRST116') throw profileError;
+
+        if (!reviewerProfile || reviewerProfile.status !== 'approved') {
+            throw new Error('Only verified users with approved profiles can leave reviews');
+        }
+
+        // Check if the user is trying to review their own profile
+        const { data: targetProfile } = await supabase
+            .from('profiles')
+            .select('user_id')
+            .eq('id', review.profile_id)
+            .single();
+
+        if (targetProfile && targetProfile.user_id === review.from_user_id) {
+            throw new Error('You cannot review your own profile');
+        }
+
+        // Check if user has already reviewed this profile
+        const { data: existingReview } = await supabase
+            .from('reviews')
+            .select('id')
+            .eq('profile_id', review.profile_id)
+            .eq('from_user_id', review.from_user_id)
+            .single();
+
+        if (existingReview) {
+            throw new Error('You have already reviewed this profile');
+        }
+
+        // Create the review
+        const { data, error } = await supabase
+            .from('reviews')
+            .insert(review)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Update profile's average rating
+        await this.updateProfileRating(review.profile_id);
+
+        return data;
+    },
+
+    async updateProfileRating(profileId: string): Promise<void> {
+        const supabase = getSupabaseClient();
+
+        // Calculate average rating
+        const { data: reviews, error } = await supabase
+            .from('reviews')
+            .select('rating')
+            .eq('profile_id', profileId);
+
+        if (error) throw error;
+
+        if (reviews && reviews.length > 0) {
+            const avgRating = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+            await supabase
+                .from('profiles')
+                .update({ rating_score: Math.round(avgRating * 100) / 100 })
+                .eq('id', profileId);
+        }
+    },
+
+    async delete(reviewId: string, userId: string): Promise<void> {
+        const supabase = getSupabaseClient();
+
+        // Only allow the reviewer to delete their own review
+        const { data: review, error: fetchError } = await supabase
+            .from('reviews')
+            .select('from_user_id')
+            .eq('id', reviewId)
+            .single();
+
+        if (fetchError) throw fetchError;
+        if (!review || review.from_user_id !== userId) {
+            throw new Error('You can only delete your own reviews');
+        }
+
+        const { error } = await supabase
+            .from('reviews')
+            .delete()
+            .eq('id', reviewId);
+
+        if (error) throw error;
+    }
+};

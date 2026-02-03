@@ -4,19 +4,28 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { ProfileHeader } from "@/components/ProfileHeader";
 import { InquiryModal } from "@/components/InquiryModal";
+import { ReviewForm } from "@/components/ReviewForm";
+import { ReviewList } from "@/components/ReviewList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Calendar, Star, Loader2, AlertCircle } from "lucide-react";
-import { profileApi, Profile } from "@/lib/api";
+import { profileApi, reviewsApi, Profile, Review } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import creatorImage from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
 
 export default function CreatorProfilePage() {
   const [, params] = useRoute("/creator/:id");
+  const { user } = useAuth();
   const [inquiryModalOpen, setInquiryModalOpen] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Reviews state
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [userHasApprovedProfile, setUserHasApprovedProfile] = useState(false);
 
   useEffect(() => {
     async function fetchProfile() {
@@ -36,6 +45,45 @@ export default function CreatorProfilePage() {
     }
     fetchProfile();
   }, [params?.id]);
+
+  // Fetch reviews when profile is loaded
+  useEffect(() => {
+    async function fetchReviews() {
+      if (!profile?.id) return;
+      setReviewsLoading(true);
+      try {
+        const data = await reviewsApi.getByProfileId(profile.id);
+        setReviews(data);
+      } catch (err) {
+        console.error("Error fetching reviews:", err);
+      } finally {
+        setReviewsLoading(false);
+      }
+    }
+    fetchReviews();
+  }, [profile?.id]);
+
+  // Check if current user has an approved profile (can leave reviews)
+  useEffect(() => {
+    async function checkUserProfile() {
+      if (!user?.id) {
+        setUserHasApprovedProfile(false);
+        return;
+      }
+      try {
+        const userProfile = await profileApi.getMyProfile(user.id);
+        setUserHasApprovedProfile(userProfile?.status === 'approved');
+      } catch {
+        setUserHasApprovedProfile(false);
+      }
+    }
+    checkUserProfile();
+  }, [user?.id]);
+
+  // Handle new review submission
+  const handleReviewSubmitted = (newReview: Review) => {
+    setReviews(prev => [newReview, ...prev]);
+  };
 
   if (isLoading) {
     return (
@@ -184,9 +232,17 @@ export default function CreatorProfilePage() {
                 </TabsContent>
 
                 <TabsContent value="reviews" className="space-y-6 mt-6">
-                  <div className="text-center py-12 text-muted-foreground">
-                    <p>No reviews yet.</p>
-                  </div>
+                  {/* Review Form - only for verified users */}
+                  {user && profile?.user_id !== user.id && (
+                    <ReviewForm
+                      profileId={profile.id}
+                      onReviewSubmitted={handleReviewSubmitted}
+                      userHasProfile={userHasApprovedProfile}
+                    />
+                  )}
+
+                  {/* Reviews List */}
+                  <ReviewList reviews={reviews} isLoading={reviewsLoading} />
                 </TabsContent>
               </Tabs>
             </div>
