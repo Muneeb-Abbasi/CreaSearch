@@ -422,12 +422,12 @@ export default function ProfileCreationPage() {
               </div>
               <Progress value={progress} data-testid="progress-profile" />
             </div>
-            <div className="flex gap-2 mt-4">
+            <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide">
               {steps.map((step, index) => (
                 <Badge
                   key={index}
                   variant={currentStep > index + 1 ? "default" : currentStep === index + 1 ? "default" : "secondary"}
-                  className="flex-1 justify-center"
+                  className="flex-shrink-0 justify-center px-3 py-1 text-xs sm:text-sm whitespace-nowrap"
                 >
                   {currentStep > index + 1 && <CheckCircle2 className="w-3 h-3 mr-1" />}
                   {step}

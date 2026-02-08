@@ -314,7 +314,7 @@ export default function SearchPage() {
             <h1 className="font-heading text-3xl font-bold mb-6" data-testid="text-page-title">
               Find Creators
             </h1>
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
@@ -354,9 +354,15 @@ export default function SearchPage() {
         </div>
 
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-8">
-          <div className="flex gap-8">
-            <aside className={`${showFilters ? 'block' : 'hidden'} md:block w-full md:w-64 flex-shrink-0`}>
-              <div className="sticky top-24 space-y-6">
+          <div className="flex flex-col md:flex-row gap-4 md:gap-8">
+            <aside className={`${showFilters ? 'fixed inset-0 z-40 bg-background p-4 overflow-y-auto md:static md:p-0 md:bg-transparent' : 'hidden'} md:block w-full md:w-64 flex-shrink-0`}>
+              <div className="md:sticky md:top-24 space-y-6">
+                <div className="flex justify-between items-center md:hidden mb-4">
+                  <h2 className="font-semibold text-lg">Filters</h2>
+                  <Button variant="ghost" size="icon" onClick={() => setShowFilters(false)}>
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">
                     Collaboration Type

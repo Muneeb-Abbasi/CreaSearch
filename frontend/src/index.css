@@ -277,6 +277,20 @@
     pointer-events: none;
   }
 
+  /* Hide scrollbar but allow scrolling - for mobile horizontal scroll */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Mobile touch target minimum (iOS/Android guidelines: 44px) */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+
   /* .no-default-hover-elevate/no-default-active-elevate is an escape hatch so consumers of
    * buttons/badges can remove the automatic brightness adjustment on interactions
    * and program their own. */

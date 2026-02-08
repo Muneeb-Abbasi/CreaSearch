@@ -1,0 +1,53 @@
+You are a senior frontend engineer with strong UX and mobile-first expertise.
+
+Goal:
+Make the existing website fully mobile-friendly and responsive WITHOUT changing business logic or backend behavior.
+
+Rules:
+- Do NOT break desktop layout.
+- Do NOT change APIs, routes, or data models.
+- Keep UI visually consistent with current branding.
+- Prefer minimal, clean changes over rewrites.
+
+Tasks:
+1. Audit the current UI for mobile issues:
+   - Overflow, horizontal scrolling
+   - Fixed widths / heights
+   - Unreadable font sizes
+   - Broken grids or cards
+   - Navigation issues on small screens
+   - Touch targets too small
+
+2. Apply a **mobile-first responsive strategy**:
+   - Replace fixed widths with fluid units (%, rem, vw)
+   - Use Flexbox/Grid correctly for stacking on small screens
+   - Introduce breakpoints only where necessary (e.g. 640px, 768px, 1024px)
+   - Ensure proper spacing and readable typography on mobile
+
+3. Navigation:
+   - Convert desktop nav to mobile-friendly menu (hamburger or collapsible)
+   - Ensure tap targets are at least 44px height
+   - No hover-only interactions on mobile
+
+4. Forms & Buttons:
+   - Inputs full-width on mobile
+   - Proper vertical spacing
+   - Prevent zoom issues (font-size ≥ 16px)
+
+5. Media:
+   - Ensure images and videos scale correctly
+   - No overflow on small screens
+   - Use max-width: 100%
+
+6. Performance:
+   - Avoid heavy reflows
+   - No unnecessary JS for responsiveness if CSS can handle it
+
+Deliverables:
+- Show EXACT files changed
+- Explain why each change was needed
+- Provide before/after behavior explanation
+- If CSS framework is used, follow its best practices
+- If custom CSS, keep it modular and readable
+
+Start by identifying the WORST mobile issues first, then fix incrementally.
