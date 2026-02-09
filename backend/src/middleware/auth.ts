@@ -47,20 +47,37 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 };
 
 export const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
-    // First run authentication
-    await requireAuth(req, res, async () => {
-        // Then check if the user has admin metadata or role
-        // This is a placeholder. You should implement actual role checking logic
-        // based on your app's structure (e.g., profiles table or app_metadata)
+    const authHeader = req.headers.authorization;
 
-        // For now, let's assume we check a "role" in app_metadata or a profile lookup
-        // const { data: profile } = await supabase.from('profiles').select('role').eq('user_id', req.user.id).single();
+    if (!authHeader) {
+        return res.status(401).json({ error: 'No authorization header provided' });
+    }
 
-        // if (profile?.role !== 'admin') {
-        //    return res.status(403).json({ error: 'Admin access required' });
-        // }
+    const token = authHeader.replace('Bearer ', '');
 
-        // TEMPORARY: Allow all authenticated users for now until Admin role logic is finalized
+    try {
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+
+        if (error || !user) {
+            return res.status(401).json({ error: 'Invalid or expired token' });
+        }
+
+        req.user = user;
+
+        // Check if user has admin role in profiles table
+        const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('user_id', user.id)
+            .single();
+
+        if (profileError || profile?.role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
         next();
-    });
+    } catch (error) {
+        console.error('Admin middleware error:', error);
+        res.status(500).json({ error: 'Internal server error during authentication' });
+    }
 };

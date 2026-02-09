@@ -4,7 +4,7 @@ import multer from "multer";
 import { profileService, reviewService, scoringService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
-import { requireAuth } from "./middleware/auth";
+import { requireAuth, requireAdmin } from "./middleware/auth";
 
 
 // Configure multer for file uploads
@@ -84,7 +84,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/profiles - Create new profile
   app.post("/api/profiles", requireAuth, async (req: Request, res: Response) => {
     try {
-      console.log("[POST] /api/profiles - Payload:", JSON.stringify(req.body));
 
       // Use verified user ID from token
       const userId = req.user.id;
@@ -160,7 +159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============= ADMIN ROUTES =============
 
   // GET /api/admin/pending
-  app.get("/api/admin/pending", requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/admin/pending", requireAdmin, async (req: Request, res: Response) => {
     try {
       // TODO: Add strict admin role check here. For now, requireAuth is a start.
       const profiles = await profileService.getPending();
@@ -172,7 +171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/admin/approve/:id
-  app.post("/api/admin/approve/:id", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/admin/approve/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const profile = await profileService.approve(req.params.id);
 
@@ -189,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/admin/reject/:id
-  app.post("/api/admin/reject/:id", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/admin/reject/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const profile = await profileService.reject(req.params.id);
       emailService.sendProfileRejectedEmail(profile.user_id, profile.name)
@@ -202,7 +201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // DELETE /api/admin/delete/:id
-  app.delete("/api/admin/delete/:id", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/admin/delete/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       // TODO: Verify user is admin
       const profileId = req.params.id;
@@ -470,7 +469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/admin/verify-instagram-now/:id - Admin: Force immediate Instagram verification
-  app.post("/api/admin/verify-instagram-now/:id", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/admin/verify-instagram-now/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const profile = await profileService.getById(req.params.id);
       if (!profile) {
@@ -513,7 +512,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/admin/refresh-youtube - Trigger manual YouTube refresh for all profiles
-  app.post("/api/admin/refresh-youtube", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/admin/refresh-youtube", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { triggerYouTubeRefresh } = await import("./services/cron");
       const result = await triggerYouTubeRefresh();
@@ -529,7 +528,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/admin/cron-status - Get cron job status
-  app.get("/api/admin/cron-status", requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/admin/cron-status", requireAdmin, async (req: Request, res: Response) => {
     try {
       const { getCronStatus } = await import("./services/cron");
       const status = getCronStatus();

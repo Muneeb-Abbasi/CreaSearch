@@ -1,6 +1,34 @@
+# Dependencies
 node_modules
 dist
+
+# Environment files (ALL locations) - NEVER commit secrets
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# API keys and secrets
+*.pem
+*.key
+*.p12
+
+# IDE and OS
 .DS_Store
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
 server/public
 vite.config.ts.*
-.env 
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local development
+.local
