@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle, Star, ScrollText } from "lucide-react";
 import { SiYoutube, SiInstagram } from "react-icons/si";
 import { useAuth } from "@/contexts/AuthContext";
-import { adminApi, profileApi, Profile } from "@/lib/api";
+import { adminApi, profileApi, featuredProfileApi, Profile, type AdminActionLog } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileDetailModal } from "@/components/ProfileDetailModal";
 
@@ -76,6 +76,10 @@ export default function AdminDashboardPage() {
   const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
+  const [featureLoading, setFeatureLoading] = useState<string | null>(null);
+  const [actionLogs, setActionLogs] = useState<AdminActionLog[]>([]);
+  const [actionLogLoading, setActionLogLoading] = useState(false);
 
   // Hardcoded admin emails (can access admin dashboard)
   const ADMIN_EMAILS = [
@@ -155,6 +159,53 @@ export default function AdminDashboardPage() {
       fetchAllProfiles();
     }
   }, [user, authLoading, isAdmin]);
+
+  // Fetch featured profile IDs
+  useEffect(() => {
+    if (!authLoading && user && isAdmin) {
+      fetchFeaturedIds();
+    }
+  }, [user, authLoading, isAdmin]);
+
+  const fetchFeaturedIds = async () => {
+    try {
+      const featured = await featuredProfileApi.getAll();
+      setFeaturedIds(new Set(featured.map(f => f.profile_id)));
+    } catch {
+      // non-critical
+    }
+  };
+
+  const fetchActionLogs = async () => {
+    setActionLogLoading(true);
+    try {
+      const logs = await adminApi.getActionLog(50);
+      setActionLogs(logs);
+    } catch {
+      toast({ title: "Error", description: "Failed to load action log", variant: "destructive" });
+    } finally {
+      setActionLogLoading(false);
+    }
+  };
+
+  const handleToggleFeatured = async (profileId: string) => {
+    setFeatureLoading(profileId);
+    try {
+      if (featuredIds.has(profileId)) {
+        await featuredProfileApi.unfeature(profileId);
+        setFeaturedIds(prev => { const s = new Set(prev); s.delete(profileId); return s; });
+        toast({ title: "Unfeatured", description: "Profile removed from featured list." });
+      } else {
+        await featuredProfileApi.feature(profileId);
+        setFeaturedIds(prev => new Set(prev).add(profileId));
+        toast({ title: "Featured!", description: "Profile added to featured list on homepage." });
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to update featured status", variant: "destructive" });
+    } finally {
+      setFeatureLoading(null);
+    }
+  };
 
   // Redirect if not logged in
   useEffect(() => {
@@ -337,7 +388,7 @@ export default function AdminDashboardPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Total Users</p>
-                      <p className="text-3xl font-bold" data-testid="text-total-users">-</p>
+                      <p className="text-3xl font-bold" data-testid="text-total-users">{allProfiles.length || "-"}</p>
                     </div>
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                       <Users className="w-6 h-6 text-primary" />
@@ -345,7 +396,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" />
-                    Stats coming soon
+                    {allProfiles.length > 0 ? `${allProfiles.length} registered` : "No profiles yet"}
                   </p>
                 </CardContent>
               </Card>
@@ -355,7 +406,7 @@ export default function AdminDashboardPage() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Active Creators</p>
-                      <p className="text-3xl font-bold" data-testid="text-active-creators">-</p>
+                      <p className="text-3xl font-bold" data-testid="text-active-creators">{allProfiles.filter(p => p.status === 'approved').length || "-"}</p>
                     </div>
                     <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
                       <CheckCircle2 className="w-6 h-6 text-green-600 dark:text-green-500" />
@@ -363,7 +414,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
                     <TrendingUp className="w-3 h-3" />
-                    Stats coming soon
+                    {featuredIds.size > 0 ? `${featuredIds.size} featured` : "None featured yet"}
                   </p>
                 </CardContent>
               </Card>
@@ -396,6 +447,7 @@ export default function AdminDashboardPage() {
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="users">All Profiles</TabsTrigger>
+                <TabsTrigger value="action-log" onClick={() => actionLogs.length === 0 && fetchActionLogs()}>Action Log</TabsTrigger>
                 <TabsTrigger value="reports">Reports</TabsTrigger>
               </TabsList>
 
@@ -564,6 +616,21 @@ export default function AdminDashboardPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
+                                onClick={() => handleToggleFeatured(profile.id)}
+                                disabled={featureLoading === profile.id}
+                                className={featuredIds.has(profile.id) ? "text-yellow-500 hover:text-yellow-600" : ""}
+                                title={featuredIds.has(profile.id) ? "Remove from featured" : "Add to featured"}
+                              >
+                                {featureLoading === profile.id ? (
+                                  <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                ) : (
+                                  <Star className={`w-4 h-4 mr-1 ${featuredIds.has(profile.id) ? "fill-yellow-500" : ""}`} />
+                                )}
+                                {featuredIds.has(profile.id) ? "Unfeature" : "Feature"}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => handleDelete(profile.id)}
                                 disabled={actionLoading === profile.id}
                                 className="text-red-500 hover:text-red-600 hover:bg-red-50"
@@ -576,6 +643,54 @@ export default function AdminDashboardPage() {
                                 Delete
                               </Button>
                             </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="action-log" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle>Admin Action Log</CardTitle>
+                      <Button variant="outline" size="sm" onClick={fetchActionLogs} disabled={actionLogLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-1 ${actionLogLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {actionLogLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                      </div>
+                    ) : actionLogs.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <ScrollText className="w-12 h-12 mx-auto mb-4 opacity-40" />
+                        <p>No admin actions logged yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {actionLogs.map((log) => (
+                          <div key={log.id} className="flex items-center justify-between p-3 border rounded-md">
+                            <div className="flex items-center gap-3">
+                              <Badge
+                                variant={log.action.includes('approve') || log.action.includes('feature') ? 'default' : 'destructive'}
+                                className={`text-xs ${log.action.includes('approve') || log.action.includes('feature') ? 'bg-green-500' : ''}`}
+                              >
+                                {log.action.replace(/_/g, ' ')}
+                              </Badge>
+                              <div>
+                                <p className="text-sm">
+                                  <span className="font-medium">{log.target_type}</span>
+                                  <span className="text-muted-foreground"> — {log.target_id.slice(0, 8)}...</span>
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
                           </div>
                         ))}
                       </div>

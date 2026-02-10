@@ -4,6 +4,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { Search, Menu, User, LogOut } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationBell } from "./NotificationBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +50,8 @@ export function Header() {
 
           <div className="flex items-center gap-2">
             <ThemeToggle />
+
+            {!loading && user && <NotificationBell />}
 
             {!loading && user ? (
               <DropdownMenu>
