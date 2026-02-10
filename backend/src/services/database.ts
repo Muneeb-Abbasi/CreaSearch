@@ -643,3 +643,168 @@ export const socialAccountService = {
         if (error) throw error;
     }
 };
+
+// ============================================
+// Notification types and service
+// ============================================
+
+export interface Notification {
+    id: string;
+    user_id: string;
+    type: 'profile_approved' | 'profile_rejected' | 'new_inquiry' | 'new_review' | 'verification_complete' | 'admin_announcement' | 'profile_featured';
+    title: string;
+    message: string | null;
+    metadata: Record<string, any>;
+    is_read: boolean;
+    created_at: string;
+}
+
+export const notificationService = {
+    async getByUserId(userId: string, limit = 50, offset = 0): Promise<Notification[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getUnreadCount(userId: string): Promise<number> {
+        const supabase = getSupabaseClient();
+        const { count, error } = await supabase
+            .from('notifications')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', userId)
+            .eq('is_read', false);
+
+        if (error) throw error;
+        return count || 0;
+    },
+
+    async markAsRead(notificationId: string, userId: string): Promise<void> {
+        const supabase = getSupabaseClient();
+        const { error } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('id', notificationId)
+            .eq('user_id', userId);
+
+        if (error) throw error;
+    },
+
+    async markAllAsRead(userId: string): Promise<void> {
+        const supabase = getSupabaseClient();
+        const { error } = await supabase
+            .from('notifications')
+            .update({ is_read: true })
+            .eq('user_id', userId)
+            .eq('is_read', false);
+
+        if (error) throw error;
+    },
+
+    async create(notification: Omit<Notification, 'id' | 'is_read' | 'created_at'>): Promise<Notification> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('notifications')
+            .insert(notification)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+};
+
+// ============================================
+// Admin Action Log types and service
+// ============================================
+
+export interface AdminActionLog {
+    id: string;
+    admin_user_id: string;
+    action: string;
+    target_type: 'profile' | 'user' | 'review' | 'category' | 'niche';
+    target_id: string;
+    details: Record<string, any>;
+    created_at: string;
+}
+
+export const adminActionLogService = {
+    async create(log: Omit<AdminActionLog, 'id' | 'created_at'>): Promise<AdminActionLog> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('admin_action_log')
+            .insert(log)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async getAll(limit = 50, offset = 0): Promise<AdminActionLog[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('admin_action_log')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+        return data || [];
+    }
+};
+
+// ============================================
+// Featured Profiles types and service
+// ============================================
+
+export interface FeaturedProfile {
+    id: string;
+    profile_id: string;
+    featured_by: string;
+    sort_order: number;
+    featured_at: string;
+    expires_at: string | null;
+}
+
+export const featuredProfileService = {
+    async getAll(): Promise<FeaturedProfile[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('featured_profiles')
+            .select('*')
+            .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async create(featured: { profile_id: string; featured_by: string; sort_order?: number; expires_at?: string }): Promise<FeaturedProfile> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('featured_profiles')
+            .insert(featured)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async delete(profileId: string): Promise<void> {
+        const supabase = getSupabaseClient();
+        const { error } = await supabase
+            .from('featured_profiles')
+            .delete()
+            .eq('profile_id', profileId);
+
+        if (error) throw error;
+    }
+};
+

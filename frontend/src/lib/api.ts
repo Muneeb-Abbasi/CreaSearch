@@ -222,6 +222,11 @@ export const adminApi = {
             throw new Error(error.error || 'Failed to delete profile');
         }
     },
+
+    // Get admin action log
+    async getActionLog(limit = 50, offset = 0): Promise<AdminActionLog[]> {
+        return fetchWithError<AdminActionLog[]>(`${API_BASE}/admin/action-log?limit=${limit}&offset=${offset}`);
+    },
 };
 
 export interface UploadResult {
@@ -380,3 +385,84 @@ export const socialAccountApi = {
         return fetchWithError<SocialAccount[]>(`${API_BASE}/profiles/${profileId}/social-accounts`);
     },
 };
+
+// ============= NOTIFICATION TYPES & API =============
+
+export interface Notification {
+    id: string;
+    user_id: string;
+    type: 'profile_approved' | 'profile_rejected' | 'new_inquiry' | 'new_review' | 'verification_complete' | 'admin_announcement' | 'profile_featured';
+    title: string;
+    message: string | null;
+    metadata: Record<string, any>;
+    is_read: boolean;
+    created_at: string;
+}
+
+export const notificationApi = {
+    async getAll(limit = 50, offset = 0): Promise<Notification[]> {
+        return fetchWithError<Notification[]>(`${API_BASE}/notifications?limit=${limit}&offset=${offset}`);
+    },
+
+    async getUnreadCount(): Promise<{ count: number }> {
+        return fetchWithError<{ count: number }>(`${API_BASE}/notifications/unread-count`);
+    },
+
+    async markAsRead(id: string): Promise<void> {
+        await fetchWithError(`${API_BASE}/notifications/${id}/read`, {
+            method: 'PATCH',
+        });
+    },
+
+    async markAllAsRead(): Promise<void> {
+        await fetchWithError(`${API_BASE}/notifications/read-all`, {
+            method: 'PATCH',
+        });
+    },
+};
+
+// ============= ADMIN API =============
+
+export interface AdminActionLog {
+    id: string;
+    admin_user_id: string;
+    action: string;
+    target_type: 'profile' | 'user' | 'review' | 'category' | 'niche';
+    target_id: string;
+    details: Record<string, any>;
+    created_at: string;
+}
+
+
+
+// ============= FEATURED PROFILES API =============
+
+export interface FeaturedProfile {
+    id: string;
+    profile_id: string;
+    featured_by: string;
+    sort_order: number;
+    featured_at: string;
+    expires_at: string | null;
+}
+
+export const featuredProfileApi = {
+    async getAll(): Promise<FeaturedProfile[]> {
+        return fetchWithError<FeaturedProfile[]>(`${API_BASE}/featured-profiles`);
+    },
+
+    async feature(profileId: string, sortOrder?: number, expiresAt?: string): Promise<FeaturedProfile> {
+        return fetchWithError<FeaturedProfile>(`${API_BASE}/admin/featured-profiles`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ profile_id: profileId, sort_order: sortOrder, expires_at: expiresAt }),
+        });
+    },
+
+    async unfeature(profileId: string): Promise<void> {
+        await fetchWithError(`${API_BASE}/admin/featured-profiles/${profileId}`, {
+            method: 'DELETE',
+        });
+    },
+};
+

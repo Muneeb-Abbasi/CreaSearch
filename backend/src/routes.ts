@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { profileService, reviewService, scoringService, categoryService, socialAccountService, ProfileFilters } from "./services/database";
+import { profileService, reviewService, scoringService, categoryService, socialAccountService, notificationService, adminActionLogService, featuredProfileService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
 import { requireAuth, requireAdmin } from "./middleware/auth";
@@ -604,6 +604,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting cron status:", error);
       res.status(500).json({ error: "Failed to get cron status" });
+    }
+  });
+
+  // ============================================
+  // NOTIFICATION ROUTES
+  // ============================================
+
+  // GET /api/notifications - Get current user's notifications
+  app.get("/api/notifications", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user.id;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const notifications = await notificationService.getByUserId(userId, limit, offset);
+      res.json(notifications);
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications" });
+    }
+  });
+
+  // GET /api/notifications/unread-count - Get unread notification count
+  app.get("/api/notifications/unread-count", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user.id;
+      const count = await notificationService.getUnreadCount(userId);
+      res.json({ count });
+    } catch (error) {
+      console.error("Error fetching unread count:", error);
+      res.status(500).json({ error: "Failed to fetch unread count" });
+    }
+  });
+
+  // PATCH /api/notifications/:id/read - Mark a notification as read
+  app.patch("/api/notifications/:id/read", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user.id;
+      await notificationService.markAsRead(req.params.id, userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking notification as read:", error);
+      res.status(500).json({ error: "Failed to mark notification as read" });
+    }
+  });
+
+  // PATCH /api/notifications/read-all - Mark all notifications as read
+  app.patch("/api/notifications/read-all", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).user.id;
+      await notificationService.markAllAsRead(userId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking all notifications as read:", error);
+      res.status(500).json({ error: "Failed to mark all as read" });
+    }
+  });
+
+  // ============================================
+  // ADMIN ACTION LOG ROUTES
+  // ============================================
+
+  // GET /api/admin/action-log - Get admin action log
+  app.get("/api/admin/action-log", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+      const logs = await adminActionLogService.getAll(limit, offset);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching admin action log:", error);
+      res.status(500).json({ error: "Failed to fetch action log" });
+    }
+  });
+
+  // ============================================
+  // FEATURED PROFILES ROUTES
+  // ============================================
+
+  // GET /api/featured-profiles - Get featured profiles (public)
+  app.get("/api/featured-profiles", async (req: Request, res: Response) => {
+    try {
+      const featured = await featuredProfileService.getAll();
+      res.json(featured);
+    } catch (error) {
+      console.error("Error fetching featured profiles:", error);
+      res.status(500).json({ error: "Failed to fetch featured profiles" });
+    }
+  });
+
+  // POST /api/admin/featured-profiles - Feature a profile (admin only)
+  app.post("/api/admin/featured-profiles", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const adminUserId = (req as any).user.id;
+      const { profile_id, sort_order, expires_at } = req.body;
+
+      if (!profile_id) {
+        return res.status(400).json({ error: "profile_id is required" });
+      }
+
+      const featured = await featuredProfileService.create({
+        profile_id,
+        featured_by: adminUserId,
+        sort_order: sort_order || 0,
+        expires_at
+      });
+
+      // Log admin action
+      await adminActionLogService.create({
+        admin_user_id: adminUserId,
+        action: 'feature_profile',
+        target_type: 'profile',
+        target_id: profile_id,
+        details: { sort_order, expires_at }
+      });
+
+      // Notify the profile owner
+      const profile = await profileService.getById(profile_id);
+      if (profile) {
+        await notificationService.create({
+          user_id: profile.user_id,
+          type: 'profile_featured',
+          title: 'Your profile has been featured!',
+          message: 'Congratulations! An admin has featured your profile on Creasearch.',
+          metadata: { profile_id }
+        });
+      }
+
+      res.json(featured);
+    } catch (error) {
+      console.error("Error featuring profile:", error);
+      res.status(500).json({ error: "Failed to feature profile" });
+    }
+  });
+
+  // DELETE /api/admin/featured-profiles/:profileId - Unfeature a profile (admin only)
+  app.delete("/api/admin/featured-profiles/:profileId", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const adminUserId = (req as any).user.id;
+      await featuredProfileService.delete(req.params.profileId);
+
+      // Log admin action
+      await adminActionLogService.create({
+        admin_user_id: adminUserId,
+        action: 'unfeature_profile',
+        target_type: 'profile',
+        target_id: req.params.profileId,
+        details: {}
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error unfeaturing profile:", error);
+      res.status(500).json({ error: "Failed to unfeature profile" });
     }
   });
 
