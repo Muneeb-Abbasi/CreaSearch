@@ -593,7 +593,11 @@ CREATE TRIGGER trg_update_follower_total
 
 ---
 
-## Phase 2: Content & Reviews Cleanup
+## Phase 2: Content & Reviews Cleanup ✅ COMPLETED
+
+> `portfolio_items` and `reviews` table cleanup.
+> 
+> **Status:** SQL migration created. Backend and frontend code updated to match column renames (`from_user_id` → `reviewer_user_id`, `image_url` → `media_url`).
 
 ### 2.1 — `portfolio_items` (MINOR UPDATE)
 
@@ -830,7 +834,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_text_search
 | Phase | Focus | Tables Affected | Priority | Status |
 |-------|-------|-----------------|----------|--------|
 | **1** | Core Foundation | `users`, `categories`, `niches`, `profiles`, `social_accounts` | 🔴 Critical | ✅ Done |
-| **2** | Content & Reviews | `portfolio_items`, `reviews` | 🟡 High | ⬜ Next |
+| **2** | Content & Reviews | `portfolio_items`, `reviews` | 🟡 High | ✅ Done |
 | **3** | Admin & Engagement | `notifications`, `admin_action_log`, `featured_profiles` | 🟡 High | ⬜ Pending |
 | **4** | Row Level Security | All new tables | 🔴 Critical | ✅ Partial (Phase 1 tables done) |
 | **5** | Search & Discovery | Indexes, filters | 🟢 Medium | ⬜ Pending |

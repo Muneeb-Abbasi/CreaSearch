@@ -57,7 +57,7 @@ export default function CreatorProfilePage() {
         setReviews(data);
         // Check if current user already reviewed this profile
         if (user?.id) {
-          const hasReviewed = data.some(r => r.from_user_id === user.id);
+          const hasReviewed = data.some(r => r.reviewer_user_id === user.id);
           setUserHasReviewed(hasReviewed);
         }
       } catch (err) {

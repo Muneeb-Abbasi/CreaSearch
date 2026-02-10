@@ -332,7 +332,7 @@ export const verificationApi = {
 export interface Review {
     id: string;
     profile_id: string;
-    from_user_id: string;
+    reviewer_user_id: string;
     rating: number;
     comment: string | null;
     created_at: string;

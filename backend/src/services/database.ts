@@ -280,7 +280,7 @@ export const profileService = {
 export interface Review {
     id: string;
     profile_id: string;
-    from_user_id: string;
+    reviewer_user_id: string;
     rating: number;
     comment: string | null;
     created_at: string;
@@ -304,7 +304,7 @@ export const reviewService = {
 
         // Get reviewer profiles for display names
         if (reviews && reviews.length > 0) {
-            const userIds = [...new Set(reviews.map(r => r.from_user_id))];
+            const userIds = [...new Set(reviews.map(r => r.reviewer_user_id))];
             const { data: reviewerProfiles } = await supabase
                 .from('profiles')
                 .select('user_id, name, avatar_url')
@@ -314,22 +314,22 @@ export const reviewService = {
 
             return reviews.map(review => ({
                 ...review,
-                reviewer_name: profileMap.get(review.from_user_id)?.name || 'Anonymous',
-                reviewer_avatar: profileMap.get(review.from_user_id)?.avatar_url || null
+                reviewer_name: profileMap.get(review.reviewer_user_id)?.name || 'Anonymous',
+                reviewer_avatar: profileMap.get(review.reviewer_user_id)?.avatar_url || null
             }));
         }
 
         return reviews || [];
     },
 
-    async create(review: { profile_id: string; from_user_id: string; rating: number; comment?: string }): Promise<Review> {
+    async create(review: { profile_id: string; reviewer_user_id: string; rating: number; comment?: string }): Promise<Review> {
         const supabase = getSupabaseClient();
 
         // Check if reviewer has an approved profile (verified user)
         const { data: reviewerProfile, error: profileError } = await supabase
             .from('profiles')
             .select('id, status')
-            .eq('user_id', review.from_user_id)
+            .eq('user_id', review.reviewer_user_id)
             .single();
 
         if (profileError && profileError.code !== 'PGRST116') throw profileError;
@@ -345,7 +345,7 @@ export const reviewService = {
             .eq('id', review.profile_id)
             .single();
 
-        if (targetProfile && targetProfile.user_id === review.from_user_id) {
+        if (targetProfile && targetProfile.user_id === review.reviewer_user_id) {
             throw new Error('You cannot review your own profile');
         }
 
@@ -354,7 +354,7 @@ export const reviewService = {
             .from('reviews')
             .select('id')
             .eq('profile_id', review.profile_id)
-            .eq('from_user_id', review.from_user_id)
+            .eq('reviewer_user_id', review.reviewer_user_id)
             .single();
 
         if (existingReview) {
@@ -405,12 +405,12 @@ export const reviewService = {
         // Only allow the reviewer to delete their own review
         const { data: review, error: fetchError } = await supabase
             .from('reviews')
-            .select('from_user_id')
+            .select('reviewer_user_id')
             .eq('id', reviewId)
             .single();
 
         if (fetchError) throw fetchError;
-        if (!review || review.from_user_id !== userId) {
+        if (!review || review.reviewer_user_id !== userId) {
             throw new Error('You can only delete your own reviews');
         }
 

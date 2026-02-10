@@ -50,15 +50,17 @@ export type PortfolioItem = {
     profile_id: string;
     title: string;
     description: string | null;
-    image_url: string | null;
+    media_url: string | null;
+    media_type: 'image' | 'video' | 'link';
     tags: string[];
+    sort_order: number;
     created_at: string;
 };
 
 export type Review = {
     id: string;
     profile_id: string;
-    from_user_id: string;
+    reviewer_user_id: string;
     rating: number;
     comment: string | null;
     created_at: string;

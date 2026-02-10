@@ -306,7 +306,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const review = await reviewService.create({
         profile_id,
-        from_user_id: userId,
+        reviewer_user_id: userId,
         rating,
         comment: comment || null
       });
