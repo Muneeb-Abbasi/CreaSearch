@@ -9,52 +9,50 @@
  */
 
 import cron from 'node-cron';
-import { profileService } from './database';
+import { socialAccountService, SocialAccount } from './database';
 
 // Track if cron is already initialized
 let cronInitialized = false;
 
 /**
- * Refresh YouTube subscriber count for a single profile
+ * Refresh YouTube subscriber count for a single social account
  */
-async function refreshYouTubeForProfile(profileId: string, youtubeData: any): Promise<boolean> {
+async function refreshYouTubeForAccount(account: SocialAccount): Promise<boolean> {
     try {
         const { verifyYouTubeChannel } = await import('./youtube');
-        const url = typeof youtubeData === 'string' ? youtubeData : youtubeData.url;
+        const url = account.platform_url;
 
         if (!url) return false;
 
         const result = await verifyYouTubeChannel(url);
 
         if (result.status === 'VERIFIED') {
-            const profile = await profileService.getById(profileId);
-            if (profile) {
-                const updatedSocialLinks = {
-                    ...profile.social_links,
-                    youtube: {
-                        ...profile.social_links.youtube,
-                        url,
-                        channelId: result.channelId,
-                        channelTitle: result.channelTitle,
-                        subscribers: result.subscribers,
-                        status: result.status,
-                        lastUpdated: new Date().toISOString()
-                    }
-                };
-                await profileService.update(profileId, { social_links: updatedSocialLinks });
-                console.log(`[Cron] Updated YouTube for profile ${profileId}: ${result.subscribers} subscribers`);
-                return true;
-            }
+            await socialAccountService.updateVerification(account.profile_id, 'youtube', {
+                platform_user_id: result.channelId,
+                display_name: result.channelTitle,
+                follower_count: result.subscribers || 0,
+                verification_status: 'verified',
+                verified_at: new Date().toISOString(),
+                raw_data: {
+                    channelId: result.channelId,
+                    channelTitle: result.channelTitle,
+                    subscribers: result.subscribers,
+                    status: result.status,
+                    lastUpdated: new Date().toISOString()
+                }
+            });
+            console.log(`[Cron] Updated YouTube for profile ${account.profile_id}: ${result.subscribers} subscribers`);
+            return true;
         }
         return false;
     } catch (error) {
-        console.error(`[Cron] Failed to refresh YouTube for profile ${profileId}:`, error);
+        console.error(`[Cron] Failed to refresh YouTube for profile ${account.profile_id}:`, error);
         return false;
     }
 }
 
 /**
- * Refresh YouTube counts for all profiles with YouTube links
+ * Refresh YouTube counts for all profiles with YouTube accounts
  */
 async function refreshAllYouTubeProfiles(): Promise<{ updated: number; failed: number; total: number }> {
     console.log('[Cron] Starting weekly YouTube refresh...');
@@ -62,22 +60,29 @@ async function refreshAllYouTubeProfiles(): Promise<{ updated: number; failed: n
     const stats = { updated: 0, failed: 0, total: 0 };
 
     try {
-        // Get all profiles (approved status)
-        const profiles = await profileService.getAll({ status: 'approved' });
+        const { getSupabaseClient } = await import('./database');
+        const supabase = getSupabaseClient();
 
-        for (const profile of profiles) {
-            if (profile.social_links?.youtube) {
-                stats.total++;
+        // Get all YouTube social accounts that are verified
+        const { data: youtubeAccounts, error } = await supabase
+            .from('social_accounts')
+            .select('*')
+            .eq('platform', 'youtube')
+            .eq('verification_status', 'verified');
 
-                // Add delay between requests to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 1000));
+        if (error) throw error;
 
-                const success = await refreshYouTubeForProfile(profile.id, profile.social_links.youtube);
-                if (success) {
-                    stats.updated++;
-                } else {
-                    stats.failed++;
-                }
+        for (const account of youtubeAccounts || []) {
+            stats.total++;
+
+            // Add delay between requests to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const success = await refreshYouTubeForAccount(account);
+            if (success) {
+                stats.updated++;
+            } else {
+                stats.failed++;
             }
         }
 

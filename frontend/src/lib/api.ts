@@ -5,37 +5,80 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 export interface Profile {
     id: string;
     user_id: string;
-    role: 'creator' | 'organization' | 'admin';
+    profile_type: 'creator' | 'organization';
     name: string;
     title: string | null;
-    industry: string; // Required - Primary industry
-    niche: string; // Required - Specific niche/specialization
-    city: string; // Required - City name
-    country: string; // Required - Country code (e.g., 'PK', 'US')
-    phone: string; // Required - Phone number with country code
-    location: string | null; // Kept for backward compatibility
+    category_id: string | null;
+    niche_id: string | null;
+    city: string;
+    country: string;
+    phone: string;
     bio: string | null;
     avatar_url: string | null;
     video_intro_url: string | null;
     collaboration_types: string[];
-    social_links: Record<string, any>; // Can be string URL or verification data object
     follower_total: number;
-    verified_socials: string[];
     profile_completion: number;
-    gigs_completed: number;
     rating_score: number;
     creasearch_score: number;
+    review_count: number;
     status: 'pending' | 'approved' | 'rejected';
     created_at: string;
     updated_at: string;
+    // Deprecated - kept for backward compatibility
+    role?: string;
+    industry?: string;
+    niche?: string;
+    location?: string | null;
+    social_links?: Record<string, any>;
+    verified_socials?: string[];
+    gigs_completed?: number;
+}
+
+export interface Category {
+    id: string;
+    name: string;
+    slug: string;
+    sort_order: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface Niche {
+    id: string;
+    category_id: string;
+    name: string;
+    slug: string;
+    sort_order: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface SocialAccount {
+    id: string;
+    profile_id: string;
+    platform: 'youtube' | 'instagram' | 'tiktok' | 'twitter' | 'linkedin' | 'facebook' | 'other';
+    platform_url: string;
+    platform_username: string | null;
+    platform_user_id: string | null;
+    verification_status: 'unverified' | 'pending' | 'verified' | 'failed';
+    follower_count: number;
+    following_count: number;
+    post_count: number;
+    display_name: string | null;
+    raw_data: Record<string, any>;
+    verified_at: string | null;
+    last_refreshed_at: string | null;
+    created_at: string;
 }
 
 export interface ProfileFilters {
     search?: string;
     city?: string;
-    country?: string; // Filter by country code
-    industry?: string; // Filter by industry
-    niche?: string; // Filter by niche
+    country?: string;
+    category_id?: string;
+    niche_id?: string;
+    profile_type?: 'creator' | 'organization';
     minFollowers?: number;
     maxFollowers?: number;
     collaborationType?: string;
@@ -69,10 +112,12 @@ async function fetchWithError<T>(url: string, options?: RequestInit): Promise<T>
 
 export const profileApi = {
     // Get current user's profile
-    async getMyProfile(userId: string): Promise<Profile | null> {
+    async getMyProfile(userId: string, profileType?: string): Promise<Profile | null> {
         try {
             const authHeaders = await getAuthHeaders();
-            const response = await fetch(`${API_BASE}/profiles/me?user_id=${userId}`, {
+            let url = `${API_BASE}/profiles/me?user_id=${userId}`;
+            if (profileType) url += `&profile_type=${profileType}`;
+            const response = await fetch(url, {
                 headers: { ...authHeaders }
             });
 
@@ -89,14 +134,20 @@ export const profileApi = {
         }
     },
 
+    // Get all profiles for a user (creator + org)
+    async getAllByUserId(userId: string): Promise<Profile[]> {
+        return fetchWithError<Profile[]>(`${API_BASE}/profiles/user/${userId}`);
+    },
+
     // Get all approved profiles with optional filters
     async getAll(filters: ProfileFilters = {}): Promise<Profile[]> {
         const params = new URLSearchParams();
         if (filters.search) params.set('search', filters.search);
         if (filters.city) params.set('city', filters.city);
         if (filters.country) params.set('country', filters.country);
-        if (filters.industry) params.set('industry', filters.industry);
-        if (filters.niche) params.set('niche', filters.niche);
+        if (filters.category_id) params.set('category_id', filters.category_id);
+        if (filters.niche_id) params.set('niche_id', filters.niche_id);
+        if (filters.profile_type) params.set('profile_type', filters.profile_type);
         if (filters.minFollowers) params.set('minFollowers', filters.minFollowers.toString());
         if (filters.maxFollowers) params.set('maxFollowers', filters.maxFollowers.toString());
         if (filters.collaborationType) params.set('collaborationType', filters.collaborationType);
@@ -302,5 +353,30 @@ export const reviewsApi = {
             method: 'POST',
             body: JSON.stringify(review),
         });
+    },
+};
+
+// ============= CATEGORY API =============
+export const categoryApi = {
+    async getAll(): Promise<Category[]> {
+        return fetchWithError<Category[]>(`${API_BASE}/categories`);
+    },
+
+    async getNichesByCategory(categoryId: string): Promise<Niche[]> {
+        return fetchWithError<Niche[]>(`${API_BASE}/categories/${categoryId}/niches`);
+    },
+
+    async getAllNiches(categoryId?: string): Promise<Niche[]> {
+        const url = categoryId
+            ? `${API_BASE}/niches?category_id=${categoryId}`
+            : `${API_BASE}/niches`;
+        return fetchWithError<Niche[]>(url);
+    },
+};
+
+// ============= SOCIAL ACCOUNT API =============
+export const socialAccountApi = {
+    async getByProfileId(profileId: string): Promise<SocialAccount[]> {
+        return fetchWithError<SocialAccount[]>(`${API_BASE}/profiles/${profileId}/social-accounts`);
     },
 };

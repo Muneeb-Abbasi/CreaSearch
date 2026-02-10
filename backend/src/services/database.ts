@@ -24,42 +24,95 @@ export function getSupabaseClient(): SupabaseClient {
 export interface Profile {
     id: string;
     user_id: string;
-    role: 'creator' | 'organization' | 'admin';
+    profile_type: 'creator' | 'organization';
     name: string;
     title: string | null;
-    industry: string; // Required - Primary industry
-    niche: string; // Required - Specific niche/specialization
-    city: string; // Required - City name
-    country: string; // Required - Country code (e.g., 'PK', 'US')
-    phone: string; // Required - Phone number with country code
-    location: string | null; // Kept for backward compatibility
+    category_id: string | null;
+    niche_id: string | null;
+    city: string;
+    country: string;
+    phone: string;
     bio: string | null;
     avatar_url: string | null;
     video_intro_url: string | null;
     collaboration_types: string[];
-    social_links: Record<string, any>; // Can be string URL or object with verification data
     follower_total: number;
-    verified_socials: string[];
     profile_completion: number;
-    gigs_completed: number;
     rating_score: number;
     creasearch_score: number;
+    review_count: number;
     status: 'pending' | 'approved' | 'rejected';
     created_at: string;
     updated_at: string;
+    // Deprecated fields - kept temporarily for backward compatibility
+    role?: string;
+    industry?: string;
+    niche?: string;
+    location?: string | null;
+    social_links?: Record<string, any>;
+    verified_socials?: string[];
+    gigs_completed?: number;
+    // Joined data (populated by queries)
+    category?: Category;
+    niche_data?: Niche;
+    social_accounts?: SocialAccount[];
+}
+
+// Category type
+export interface Category {
+    id: string;
+    name: string;
+    slug: string;
+    sort_order: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+// Niche type
+export interface Niche {
+    id: string;
+    category_id: string;
+    name: string;
+    slug: string;
+    sort_order: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+// Social Account type
+export interface SocialAccount {
+    id: string;
+    profile_id: string;
+    platform: 'youtube' | 'instagram' | 'tiktok' | 'twitter' | 'linkedin' | 'facebook' | 'other';
+    platform_url: string;
+    platform_username: string | null;
+    platform_user_id: string | null;
+    verification_status: 'unverified' | 'pending' | 'verified' | 'failed';
+    follower_count: number;
+    following_count: number;
+    post_count: number;
+    display_name: string | null;
+    raw_data: Record<string, any>;
+    verified_at: string | null;
+    last_refreshed_at: string | null;
+    created_at: string;
 }
 
 // Profile filters
 export interface ProfileFilters {
     search?: string;
     city?: string;
-    country?: string; // Filter by country code
-    industry?: string; // Filter by industry
-    niche?: string; // Filter by niche
+    country?: string;
+    category_id?: string;
+    niche_id?: string;
+    profile_type?: 'creator' | 'organization';
     minFollowers?: number;
     maxFollowers?: number;
     collaborationType?: string;
     status?: 'pending' | 'approved' | 'rejected';
+    // Keep old filter names for backward compatibility
+    industry?: string;
+    niche?: string;
 }
 
 // Database service for profiles
@@ -72,7 +125,7 @@ export const profileService = {
             .eq('status', filters.status || 'approved');
 
         if (filters.search) {
-            query = query.or(`name.ilike.%${filters.search}%,title.ilike.%${filters.search}%,industry.ilike.%${filters.search}%,niche.ilike.%${filters.search}%`);
+            query = query.or(`name.ilike.%${filters.search}%,title.ilike.%${filters.search}%,bio.ilike.%${filters.search}%`);
         }
 
         if (filters.country) {
@@ -83,12 +136,16 @@ export const profileService = {
             query = query.eq('city', filters.city);
         }
 
-        if (filters.industry) {
-            query = query.eq('industry', filters.industry);
+        if (filters.category_id) {
+            query = query.eq('category_id', filters.category_id);
         }
 
-        if (filters.niche) {
-            query = query.eq('niche', filters.niche);
+        if (filters.niche_id) {
+            query = query.eq('niche_id', filters.niche_id);
+        }
+
+        if (filters.profile_type) {
+            query = query.eq('profile_type', filters.profile_type);
         }
 
         if (filters.minFollowers) {
@@ -121,20 +178,37 @@ export const profileService = {
         return data;
     },
 
-    async getByUserId(userId: string): Promise<Profile | null> {
+    async getByUserId(userId: string, profileType?: string): Promise<Profile | null> {
         const supabase = getSupabaseClient();
-        // Order by status to prioritize approved profiles when user has multiple
-        // Status order: approved > pending > rejected
-        const { data, error } = await supabase
+        let query = supabase
             .from('profiles')
             .select('*')
-            .eq('user_id', userId)
-            .order('status', { ascending: true }) // 'approved' comes before 'pending' and 'rejected' alphabetically
+            .eq('user_id', userId);
+
+        if (profileType) {
+            query = query.eq('profile_type', profileType);
+        }
+
+        // Order by status to prioritize approved profiles when user has multiple
+        const { data, error } = await query
+            .order('status', { ascending: true })
             .limit(1)
             .maybeSingle();
 
         if (error) throw error;
         return data;
+    },
+
+    async getAllByUserId(userId: string): Promise<Profile[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
     },
 
     async create(profile: Partial<Profile>): Promise<Profile> {
@@ -358,14 +432,14 @@ export const scoringService = {
      * 3. Follower Count (25 pts) - From verified accounts
      * 4. Reputation (25 pts) - Reviews
      */
-    calculateScore(profile: Profile, reviewCount: number = 0): number {
+    calculateScore(profile: Profile, socialAccounts: SocialAccount[] = [], reviewCount: number = 0): number {
         let score = 0;
 
         // 1. Profile Completion (Max 30 points)
         if (profile.name) score += 2;
         if (profile.title) score += 2;
-        if (profile.industry) score += 2;
-        if (profile.niche) score += 2;
+        if (profile.category_id) score += 2;
+        if (profile.niche_id) score += 2;
         if (profile.city) score += 1.5;
         if (profile.country) score += 1.5;
         if (profile.phone) score += 2;
@@ -374,9 +448,10 @@ export const scoringService = {
         if (profile.video_intro_url) score += 6;
 
         // 2. Social Verification (Max 20 points) - YouTube & Instagram only
-        const socialLinks = profile.social_links || {};
-        if (socialLinks.youtube?.status === 'VERIFIED') score += 10;
-        if (socialLinks.instagram?.status === 'VALIDATED') score += 10;
+        const youtube = socialAccounts.find(sa => sa.platform === 'youtube');
+        const instagram = socialAccounts.find(sa => sa.platform === 'instagram');
+        if (youtube?.verification_status === 'verified') score += 10;
+        if (instagram?.verification_status === 'verified') score += 10;
 
         // 3. Follower Count (Max 25 points) - From verified accounts
         const followers = profile.follower_total || 0;
@@ -410,6 +485,9 @@ export const scoringService = {
             return 0;
         }
 
+        // Fetch social accounts for this profile
+        const socialAccounts = await socialAccountService.getByProfileId(profileId);
+
         // Count reviews
         const { count: reviewCount } = await supabase
             .from('reviews')
@@ -417,7 +495,7 @@ export const scoringService = {
             .eq('profile_id', profileId);
 
         // Calculate score
-        const newScore = this.calculateScore(profile, reviewCount || 0);
+        const newScore = this.calculateScore(profile, socialAccounts, reviewCount || 0);
 
         // Update profile
         const { error: updateError } = await supabase
@@ -449,5 +527,119 @@ export const scoringService = {
             await this.updateProfileScore(profile.id);
         }
         console.log(`[Scoring] Recalculated scores for ${profiles.length} profiles`);
+    }
+};
+
+// ============= CATEGORY SERVICE =============
+export const categoryService = {
+    async getAll(): Promise<Category[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('categories')
+            .select('*')
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getById(id: string): Promise<Category | null> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('categories')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+        return data;
+    },
+
+    async getNichesByCategory(categoryId: string): Promise<Niche[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('niches')
+            .select('*')
+            .eq('category_id', categoryId)
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getAllNiches(): Promise<Niche[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('niches')
+            .select('*')
+            .eq('is_active', true)
+            .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    }
+};
+
+// ============= SOCIAL ACCOUNT SERVICE =============
+export const socialAccountService = {
+    async getByProfileId(profileId: string): Promise<SocialAccount[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('social_accounts')
+            .select('*')
+            .eq('profile_id', profileId)
+            .order('platform', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async upsert(profileId: string, account: Partial<SocialAccount>): Promise<SocialAccount> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('social_accounts')
+            .upsert(
+                { ...account, profile_id: profileId },
+                { onConflict: 'profile_id,platform' }
+            )
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateVerification(
+        profileId: string,
+        platform: string,
+        verificationData: Partial<SocialAccount>
+    ): Promise<SocialAccount> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('social_accounts')
+            .update({
+                ...verificationData,
+                last_refreshed_at: new Date().toISOString()
+            })
+            .eq('profile_id', profileId)
+            .eq('platform', platform)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async delete(profileId: string, platform: string): Promise<void> {
+        const supabase = getSupabaseClient();
+        const { error } = await supabase
+            .from('social_accounts')
+            .delete()
+            .eq('profile_id', profileId)
+            .eq('platform', platform);
+
+        if (error) throw error;
     }
 };

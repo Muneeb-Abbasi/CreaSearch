@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { profileService, reviewService, scoringService, ProfileFilters } from "./services/database";
+import { profileService, reviewService, scoringService, categoryService, socialAccountService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
 import { requireAuth, requireAdmin } from "./middleware/auth";
@@ -24,17 +24,69 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // ============= CATEGORY & NICHE ROUTES =============
+
+  // GET /api/categories - List all active categories
+  app.get("/api/categories", async (req: Request, res: Response) => {
+    try {
+      const categories = await categoryService.getAll();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  // GET /api/categories/:id/niches - List niches for a category
+  app.get("/api/categories/:id/niches", async (req: Request, res: Response) => {
+    try {
+      const niches = await categoryService.getNichesByCategory(req.params.id);
+      res.json(niches);
+    } catch (error) {
+      console.error("Error fetching niches:", error);
+      res.status(500).json({ error: "Failed to fetch niches" });
+    }
+  });
+
+  // GET /api/niches - List all niches (optional filter by category_id query param)
+  app.get("/api/niches", async (req: Request, res: Response) => {
+    try {
+      const categoryId = req.query.category_id as string;
+      const niches = categoryId
+        ? await categoryService.getNichesByCategory(categoryId)
+        : await categoryService.getAllNiches();
+      res.json(niches);
+    } catch (error) {
+      console.error("Error fetching niches:", error);
+      res.status(500).json({ error: "Failed to fetch niches" });
+    }
+  });
+
+  // ============= SOCIAL ACCOUNT ROUTES =============
+
+  // GET /api/profiles/:id/social-accounts - Get social accounts for a profile
+  app.get("/api/profiles/:id/social-accounts", async (req: Request, res: Response) => {
+    try {
+      const accounts = await socialAccountService.getByProfileId(req.params.id);
+      res.json(accounts);
+    } catch (error) {
+      console.error("Error fetching social accounts:", error);
+      res.status(500).json({ error: "Failed to fetch social accounts" });
+    }
+  });
+
   // ============= PROFILE ROUTES =============
 
   // GET /api/profiles/me - Get current user's profile by user_id
   app.get("/api/profiles/me", async (req: Request, res: Response) => {
     try {
       const userId = req.query.user_id as string;
+      const profileType = req.query.profile_type as string;
       if (!userId) {
         return res.status(400).json({ error: "user_id query parameter required" });
       }
 
-      const profile = await profileService.getByUserId(userId);
+      const profile = await profileService.getByUserId(userId, profileType);
       if (!profile) {
         return res.status(404).json({ error: "Profile not found", exists: false });
       }
@@ -45,6 +97,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/profiles/user/:userId - Get all profiles for a user
+  app.get("/api/profiles/user/:userId", async (req: Request, res: Response) => {
+    try {
+      const profiles = await profileService.getAllByUserId(req.params.userId);
+      res.json(profiles);
+    } catch (error) {
+      console.error("Error fetching user profiles:", error);
+      res.status(500).json({ error: "Failed to fetch profiles" });
+    }
+  });
+
   // GET /api/profiles - List all approved profiles with filters
   app.get("/api/profiles", async (req: Request, res: Response) => {
     try {
@@ -52,8 +115,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         search: req.query.search as string,
         city: req.query.city as string,
         country: req.query.country as string,
-        industry: req.query.industry as string,
-        niche: req.query.niche as string,
+        category_id: req.query.category_id as string,
+        niche_id: req.query.niche_id as string,
+        profile_type: req.query.profile_type as ProfileFilters['profile_type'],
         minFollowers: req.query.minFollowers ? parseInt(req.query.minFollowers as string) : undefined,
         maxFollowers: req.query.maxFollowers ? parseInt(req.query.maxFollowers as string) : undefined,
         collaborationType: req.query.collaborationType as string,
@@ -317,8 +381,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ============= VERIFICATION ROUTES =============
-
   // POST /api/verify/youtube - Verify YouTube channel and get subscriber count
   app.post("/api/verify/youtube", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -332,23 +394,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { verifyYouTubeChannel } = await import("./services/youtube");
       const result = await verifyYouTubeChannel(channelUrl);
 
-      // If profileId is provided, update the profile's social_links
+      // If profileId is provided, update the social_accounts table
       if (profileId && result.status === 'VERIFIED') {
-        const profile = await profileService.getById(profileId);
-        if (profile) {
-          const updatedSocialLinks = {
-            ...profile.social_links,
-            youtube: {
-              url: channelUrl,
-              channelId: result.channelId,
-              channelTitle: result.channelTitle,
-              subscribers: result.subscribers,
-              status: result.status,
-              lastUpdated: new Date().toISOString()
-            }
-          };
-          await profileService.update(profileId, { social_links: updatedSocialLinks });
-        }
+        await socialAccountService.upsert(profileId, {
+          platform: 'youtube',
+          platform_url: channelUrl,
+          platform_user_id: result.channelId,
+          display_name: result.channelTitle,
+          follower_count: result.subscribers || 0,
+          verification_status: 'verified',
+          verified_at: new Date().toISOString(),
+          raw_data: {
+            channelId: result.channelId,
+            channelTitle: result.channelTitle,
+            subscribers: result.subscribers,
+            status: result.status,
+            lastUpdated: new Date().toISOString()
+          }
+        });
       }
 
       res.json({
@@ -364,21 +427,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/profiles/:id/verifications - Get verification status for all platforms
   app.get("/api/profiles/:id/verifications", async (req: Request, res: Response) => {
     try {
-      const profile = await profileService.getById(req.params.id);
-      if (!profile) {
+      const accounts = await socialAccountService.getByProfileId(req.params.id);
+      if (!accounts) {
         return res.status(404).json({ error: "Profile not found" });
       }
 
+      const youtubeAccount = accounts.find(a => a.platform === 'youtube');
+      const instagramAccount = accounts.find(a => a.platform === 'instagram');
+
       const verifications = {
-        youtube: profile.social_links?.youtube?.status ? {
-          status: profile.social_links.youtube.status,
-          subscribers: profile.social_links.youtube.subscribers,
-          lastUpdated: profile.social_links.youtube.lastUpdated
+        youtube: youtubeAccount?.verification_status !== 'unverified' ? {
+          status: youtubeAccount?.verification_status === 'verified' ? 'VERIFIED' : youtubeAccount?.verification_status?.toUpperCase(),
+          subscribers: youtubeAccount?.follower_count || null,
+          lastUpdated: youtubeAccount?.last_refreshed_at || youtubeAccount?.verified_at
         } : null,
-        instagram: profile.social_links?.instagram?.status ? {
-          status: profile.social_links.instagram.status,
-          followers: profile.social_links.instagram.followers,
-          lastUpdated: profile.social_links.instagram.lastUpdated
+        instagram: instagramAccount?.verification_status !== 'unverified' ? {
+          status: instagramAccount?.verification_status === 'verified' ? 'VALIDATED' : instagramAccount?.verification_status?.toUpperCase(),
+          followers: instagramAccount?.follower_count || null,
+          lastUpdated: instagramAccount?.last_refreshed_at || instagramAccount?.verified_at
         } : null
       };
 
@@ -406,25 +472,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (immediate) {
         const result = await verifyInstagramProfile(profileUrl);
 
-        // Update profile if profileId provided and verification succeeded
+        // Update social_accounts if profileId provided and verification succeeded
         if (profileId && result.status === 'VALIDATED') {
-          const profile = await profileService.getById(profileId);
-          if (profile) {
-            const updatedSocialLinks = {
-              ...profile.social_links,
-              instagram: {
-                url: profileUrl,
-                username: result.username,
-                followers: result.followers,
-                following: result.following,
-                posts: result.posts,
-                fullName: result.fullName,
-                status: result.status,
-                lastUpdated: new Date().toISOString()
-              }
-            };
-            await profileService.update(profileId, { social_links: updatedSocialLinks });
-          }
+          await socialAccountService.upsert(profileId, {
+            platform: 'instagram',
+            platform_url: profileUrl,
+            platform_username: result.username,
+            display_name: result.fullName,
+            follower_count: result.followers || 0,
+            following_count: result.following || 0,
+            post_count: result.posts || 0,
+            verification_status: 'verified',
+            verified_at: new Date().toISOString(),
+            raw_data: {
+              username: result.username,
+              followers: result.followers,
+              following: result.following,
+              posts: result.posts,
+              fullName: result.fullName,
+              status: result.status,
+              lastUpdated: new Date().toISOString()
+            }
+          });
         }
 
         return res.json({
@@ -436,21 +505,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Default: Queue for background processing (respects quota limits)
       const username = extractInstagramUsername(profileUrl);
 
-      // Mark as PENDING in profile
+      // Mark as PENDING in social_accounts
       if (profileId) {
-        const profile = await profileService.getById(profileId);
-        if (profile) {
-          const updatedSocialLinks = {
-            ...profile.social_links,
-            instagram: {
-              url: profileUrl,
-              username,
-              status: 'PENDING',
-              queuedAt: new Date().toISOString()
-            }
-          };
-          await profileService.update(profileId, { social_links: updatedSocialLinks });
-        }
+        await socialAccountService.upsert(profileId, {
+          platform: 'instagram',
+          platform_url: profileUrl,
+          platform_username: username,
+          verification_status: 'pending',
+          raw_data: {
+            queuedAt: new Date().toISOString()
+          }
+        });
       }
 
       const queueResult = await queueInstagramVerification(profileId || '', profileUrl);
@@ -471,24 +536,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/verify-instagram-now/:id - Admin: Force immediate Instagram verification
   app.post("/api/admin/verify-instagram-now/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const profile = await profileService.getById(req.params.id);
-      if (!profile) {
-        return res.status(404).json({ error: "Profile not found" });
-      }
+      const accounts = await socialAccountService.getByProfileId(req.params.id);
+      const instagramAccount = accounts.find(a => a.platform === 'instagram');
 
-      const instagramUrl = profile.social_links?.instagram?.url || profile.social_links?.instagram;
-      if (!instagramUrl) {
+      if (!instagramAccount) {
         return res.status(400).json({ error: "Profile has no Instagram link" });
       }
 
+      const instagramUrl = instagramAccount.platform_url;
+
       const { verifyInstagramProfile } = await import("./services/instagram");
-      const result = await verifyInstagramProfile(typeof instagramUrl === 'string' ? instagramUrl : instagramUrl.url);
+      const result = await verifyInstagramProfile(instagramUrl);
 
       if (result.status === 'VALIDATED') {
-        const updatedSocialLinks = {
-          ...profile.social_links,
-          instagram: {
-            url: typeof instagramUrl === 'string' ? instagramUrl : instagramUrl.url,
+        await socialAccountService.updateVerification(req.params.id, 'instagram', {
+          platform_username: result.username,
+          display_name: result.fullName,
+          follower_count: result.followers || 0,
+          following_count: result.following || 0,
+          post_count: result.posts || 0,
+          verification_status: 'verified',
+          verified_at: new Date().toISOString(),
+          raw_data: {
             username: result.username,
             followers: result.followers,
             following: result.following,
@@ -497,8 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: result.status,
             lastUpdated: new Date().toISOString()
           }
-        };
-        await profileService.update(req.params.id, { social_links: updatedSocialLinks });
+        });
       }
 
       res.json({
