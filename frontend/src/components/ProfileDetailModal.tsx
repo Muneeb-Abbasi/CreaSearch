@@ -29,7 +29,7 @@ export function ProfileDetailModal({
         <DialogHeader>
           <DialogTitle>Profile Details - {profile.name}</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           {/* Profile Header */}
           <div className="flex items-start gap-4">
@@ -50,7 +50,7 @@ export function ProfileDetailModal({
           {/* Basic Information */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-sm font-medium text-muted-foreground">Industry</p>
+              <p className="text-sm font-medium text-muted-foreground">Category</p>
               <p className="text-base">{profile.industry || "Not specified"}</p>
             </div>
             <div>

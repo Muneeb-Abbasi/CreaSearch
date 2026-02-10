@@ -25,30 +25,33 @@ export function validateName(name: string): ValidationResult {
   return { isValid: true };
 }
 
-// Industry validation
-export function validateIndustry(industry: string): ValidationResult {
-  if (!industry.trim()) {
-    return { isValid: false, error: "Industry is required" };
-  }
-  if (industry.length < 2) {
-    return { isValid: false, error: "Industry must be at least 2 characters" };
-  }
-  if (industry.length > 100) {
-    return { isValid: false, error: "Industry must be less than 100 characters" };
+// Category validation (dropdown select)
+export function validateCategoryId(categoryId: string): ValidationResult {
+  if (!categoryId) {
+    return { isValid: false, error: "Category is required" };
   }
   return { isValid: true };
 }
 
-// Niche validation
+// Niche validation (dropdown select)
+export function validateNicheId(nicheId: string): ValidationResult {
+  if (!nicheId) {
+    return { isValid: false, error: "Niche is required" };
+  }
+  return { isValid: true };
+}
+
+// Legacy validators (kept for backward compatibility)
+export function validateIndustry(industry: string): ValidationResult {
+  if (!industry.trim()) {
+    return { isValid: false, error: "Industry is required" };
+  }
+  return { isValid: true };
+}
+
 export function validateNiche(niche: string): ValidationResult {
   if (!niche.trim()) {
     return { isValid: false, error: "Niche is required" };
-  }
-  if (niche.length < 2) {
-    return { isValid: false, error: "Niche must be at least 2 characters" };
-  }
-  if (niche.length > 100) {
-    return { isValid: false, error: "Niche must be less than 100 characters" };
   }
   return { isValid: true };
 }

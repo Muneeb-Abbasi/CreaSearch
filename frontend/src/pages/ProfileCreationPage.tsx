@@ -12,15 +12,16 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CountrySelect } from "@/components/ui/country-select";
 import { CitySelect } from "@/components/ui/city-select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, CheckCircle2, Loader2, Clock, XCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { profileApi, uploadApi, Profile } from "@/lib/api";
+import { profileApi, uploadApi, categoryApi, Profile, Category, Niche } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { getCountryName } from "@/data/countries-cities";
 import {
   validateName,
-  validateIndustry,
-  validateNiche,
+  validateCategoryId,
+  validateNicheId,
   validatePhone,
   validateCountry,
   validateCity,
@@ -47,11 +48,17 @@ export default function ProfileCreationPage() {
   const progress = (currentStep / totalSteps) * 100;
 
   // Form state
+  // Categories and niches state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [niches, setNiches] = useState<Niche[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [loadingNiches, setLoadingNiches] = useState(false);
+
   const [formData, setFormData] = useState({
     name: "",
     title: "",
-    industry: "",
-    niche: "",
+    category_id: "",
+    niche_id: "",
     city: "",
     country: "",
     phone: "",
@@ -102,6 +109,41 @@ export default function ProfileCreationPage() {
       checkExistingProfile();
     }
   }, [user, authLoading]);
+
+  // Fetch categories on mount
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const data = await categoryApi.getAll();
+        setCategories(data);
+      } catch (error) {
+        console.error("Failed to fetch categories:", error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    }
+    fetchCategories();
+  }, []);
+
+  // Fetch niches when category changes
+  useEffect(() => {
+    async function fetchNiches() {
+      if (!formData.category_id) {
+        setNiches([]);
+        return;
+      }
+      setLoadingNiches(true);
+      try {
+        const data = await categoryApi.getNichesByCategory(formData.category_id);
+        setNiches(data);
+      } catch (error) {
+        console.error("Failed to fetch niches:", error);
+      } finally {
+        setLoadingNiches(false);
+      }
+    }
+    fetchNiches();
+  }, [formData.category_id]);
 
   // Re-fetch profile when page becomes visible (fixes stale cache after admin delete)
   useEffect(() => {
@@ -213,19 +255,26 @@ export default function ProfileCreationPage() {
         }
       }
 
+      // Resolve names for backward compatibility fields
+      const selectedCategory = categories.find(c => c.id === formData.category_id);
+      const selectedNiche = niches.find(n => n.id === formData.niche_id);
+
       const createdProfile = await profileApi.create({
         user_id: user?.id,
         name: formData.name,
         title: formData.title,
-        industry: formData.industry,
-        niche: formData.niche,
+        profile_type: 'creator',
+        category_id: formData.category_id || null,
+        niche_id: formData.niche_id || null,
+        industry: selectedCategory?.name || '', // backward compat
+        niche: selectedNiche?.name || '', // backward compat
         city: formData.city,
         country: formData.country,
         phone: formData.phone,
-        location: `${formData.city}, ${getCountryName(formData.country)}`, // Backward compatibility
+        location: `${formData.city}, ${getCountryName(formData.country)}`,
         bio: formData.bio,
         avatar_url: avatarUrl,
-        follower_total: 0, // Auto-calculated from verified accounts
+        follower_total: 0,
         collaboration_types: formData.collaborationTypes,
         video_intro_url: formData.videoIntroUrl || null,
         social_links: socialLinks,
@@ -295,8 +344,8 @@ export default function ProfileCreationPage() {
     let score = 0;
     if (formData.name) score += 10;
     if (formData.title) score += 10;
-    if (formData.industry) score += 10;
-    if (formData.niche) score += 10;
+    if (formData.category_id) score += 10;
+    if (formData.niche_id) score += 10;
     if (formData.country && formData.city) score += 10;
     if (formData.phone) score += 10;
     if (formData.bio) score += 15;
@@ -374,8 +423,8 @@ export default function ProfileCreationPage() {
                       setFormData({
                         name: existingProfile.name,
                         title: existingProfile.title || "",
-                        industry: existingProfile.industry || "",
-                        niche: existingProfile.niche || "",
+                        category_id: existingProfile.category_id || "",
+                        niche_id: existingProfile.niche_id || "",
                         city: existingProfile.city || "",
                         country: existingProfile.country || "",
                         phone: existingProfile.phone || "",
@@ -467,34 +516,47 @@ export default function ProfileCreationPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="industry">Industry *</Label>
-                    <Input
-                      id="industry"
-                      placeholder="e.g., Technology, Fashion, Gaming"
-                      value={formData.industry}
-                      onChange={(e) => {
-                        setFormData({ ...formData, industry: e.target.value });
-                        const result = validateIndustry(e.target.value);
-                        setErrors(prev => ({ ...prev, industry: result.error || '' }));
+                    <Label>Category *</Label>
+                    <Select
+                      value={formData.category_id}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, category_id: value, niche_id: '' });
+                        const result = validateCategoryId(value);
+                        setErrors(prev => ({ ...prev, category_id: result.error || '', niche_id: '' }));
                       }}
-                      data-testid="input-industry"
-                    />
-                    {errors.industry && <p className="text-xs text-red-500">{errors.industry}</p>}
+                    >
+                      <SelectTrigger data-testid="select-category">
+                        <SelectValue placeholder={loadingCategories ? "Loading..." : "Select category"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.category_id && <p className="text-xs text-red-500">{errors.category_id}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="niche">Niche/Specialization *</Label>
-                    <Input
-                      id="niche"
-                      placeholder="e.g., Tech Reviews, Lifestyle Vlogs"
-                      value={formData.niche}
-                      onChange={(e) => {
-                        setFormData({ ...formData, niche: e.target.value });
-                        const result = validateNiche(e.target.value);
-                        setErrors(prev => ({ ...prev, niche: result.error || '' }));
+                    <Label>Niche/Specialization *</Label>
+                    <Select
+                      value={formData.niche_id}
+                      onValueChange={(value) => {
+                        setFormData({ ...formData, niche_id: value });
+                        const result = validateNicheId(value);
+                        setErrors(prev => ({ ...prev, niche_id: result.error || '' }));
                       }}
-                      data-testid="input-niche"
-                    />
-                    {errors.niche && <p className="text-xs text-red-500">{errors.niche}</p>}
+                      disabled={!formData.category_id || loadingNiches}
+                    >
+                      <SelectTrigger data-testid="select-niche">
+                        <SelectValue placeholder={loadingNiches ? "Loading..." : !formData.category_id ? "Select category first" : "Select niche"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {niches.map((n) => (
+                          <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.niche_id && <p className="text-xs text-red-500">{errors.niche_id}</p>}
                   </div>
                 </div>
 
@@ -760,12 +822,12 @@ export default function ProfileCreationPage() {
                       <p className="font-medium">{formData.title || "Not provided"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Industry</p>
-                      <p className="font-medium">{formData.industry || "Not provided"}</p>
+                      <p className="text-xs text-muted-foreground mb-1">Category</p>
+                      <p className="font-medium">{categories.find(c => c.id === formData.category_id)?.name || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Niche</p>
-                      <p className="font-medium">{formData.niche || "Not provided"}</p>
+                      <p className="font-medium">{niches.find(n => n.id === formData.niche_id)?.name || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Location</p>

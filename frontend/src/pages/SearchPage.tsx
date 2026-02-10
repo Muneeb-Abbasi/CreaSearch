@@ -18,8 +18,15 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Search, X, SlidersHorizontal, Loader2 } from "lucide-react";
-import { profileApi, Profile } from "@/lib/api";
+import { profileApi, categoryApi, Profile, Category, Niche } from "@/lib/api";
 import { CountrySelect } from "@/components/ui/country-select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getCountryName } from "@/data/countries-cities";
 import creatorImage1 from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
 import creatorImage2 from "@assets/generated_images/Pakistani_male_creator_headshot_3c6570b2.png";
@@ -201,12 +208,44 @@ export default function SearchPage() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
   const [selectedCountry, setSelectedCountry] = useState("");
-  const [industryFilter, setIndustryFilter] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
   const [nicheFilter, setNicheFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [apiCreators, setApiCreators] = useState<any[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [niches, setNiches] = useState<Niche[]>([]);
   const creatorsPerPage = 6;
+
+  // Fetch categories on mount
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const data = await categoryApi.getAll();
+        setCategories(data);
+      } catch (error) {
+        console.error("Failed to fetch categories:", error);
+      }
+    }
+    fetchCategories();
+  }, []);
+
+  // Fetch niches when category filter changes
+  useEffect(() => {
+    async function fetchNiches() {
+      if (!categoryFilter) {
+        setNiches([]);
+        return;
+      }
+      try {
+        const data = await categoryApi.getNichesByCategory(categoryFilter);
+        setNiches(data);
+      } catch (error) {
+        console.error("Failed to fetch niches:", error);
+      }
+    }
+    fetchNiches();
+  }, [categoryFilter]);
 
   // Fetch profiles from API
   useEffect(() => {
@@ -216,8 +255,8 @@ export default function SearchPage() {
         const profiles = await profileApi.getAll({
           search: searchQuery || undefined,
           country: selectedCountry || undefined,
-          industry: industryFilter || undefined,
-          niche: nicheFilter || undefined,
+          category_id: categoryFilter || undefined,
+          niche_id: nicheFilter || undefined,
           collaborationType: selectedTypes[0] || undefined,
         });
         // Transform API profiles to match component format
@@ -233,22 +272,21 @@ export default function SearchPage() {
           verified: profile.verified_socials?.length > 0,
           followerCount: profile.follower_total || 0,
           tags: profile.collaboration_types || [],
-          industry: profile.industry,
-          niche: profile.niche,
+          category_id: profile.category_id,
+          niche_id: profile.niche_id,
           country: profile.country,
           city: profile.city,
         }));
         setApiCreators(transformed);
       } catch (error) {
         console.error("Error fetching profiles:", error);
-        // Fallback to mock data on error
         setApiCreators([]);
       } finally {
         setIsLoading(false);
       }
     }
     fetchProfiles();
-  }, [searchQuery, selectedCountry, industryFilter, nicheFilter, selectedTypes]);
+  }, [searchQuery, selectedCountry, categoryFilter, nicheFilter, selectedTypes]);
 
   // Use API creators if available, otherwise use mock data
   const allCreators = apiCreators.length > 0 ? apiCreators : mockCreators;
@@ -439,34 +477,48 @@ export default function SearchPage() {
 
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">
-                    Industry
+                    Category
                   </Label>
-                  <Input
-                    placeholder="e.g. Technology, Fashion..."
-                    value={industryFilter}
-                    onChange={(e) => {
-                      setIndustryFilter(e.target.value);
+                  <Select
+                    value={categoryFilter}
+                    onValueChange={(value) => {
+                      setCategoryFilter(value);
+                      setNicheFilter("");
                       handleFilterChange();
                     }}
-                    className="text-sm"
-                    data-testid="input-industry"
-                  />
+                  >
+                    <SelectTrigger className="text-sm" data-testid="select-category">
+                      <SelectValue placeholder="All categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
                   <Label className="text-sm font-semibold mb-3 block">
                     Niche
                   </Label>
-                  <Input
-                    placeholder="e.g. AI tools, Streetwear..."
+                  <Select
                     value={nicheFilter}
-                    onChange={(e) => {
-                      setNicheFilter(e.target.value);
+                    onValueChange={(value) => {
+                      setNicheFilter(value);
                       handleFilterChange();
                     }}
-                    className="text-sm"
-                    data-testid="input-niche"
-                  />
+                    disabled={!categoryFilter}
+                  >
+                    <SelectTrigger className="text-sm" data-testid="select-niche">
+                      <SelectValue placeholder={!categoryFilter ? "Select category first" : "All niches"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {niches.map((n) => (
+                        <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
@@ -498,7 +550,7 @@ export default function SearchPage() {
                     setSelectedTypes([]);
                     setSelectedCities([]);
                     setSelectedCountry("");
-                    setIndustryFilter("");
+                    setCategoryFilter("");
                     setNicheFilter("");
                     setFollowerRange([0]);
                     setCurrentPage(1);

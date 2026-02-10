@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Upload, CheckCircle2, Loader2, Clock, XCircle, CheckCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { profileApi, uploadApi, Profile } from "@/lib/api";
+import { profileApi, uploadApi, categoryApi, Profile, Category, Niche } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { CountrySelect } from "@/components/ui/country-select";
 import { CitySelect } from "@/components/ui/city-select";
@@ -25,8 +25,8 @@ import {
 } from "@/components/ui/select";
 import {
   validateName,
-  validateIndustry,
-  validateNiche,
+  validateCategoryId,
+  validateNicheId,
   validatePhone,
   validateCountry,
   validateCity,
@@ -51,11 +51,17 @@ export default function BrandProfileCreationPage() {
   const totalSteps = 4;
   const progress = (currentStep / totalSteps) * 100;
 
+  // Categories and niches state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [niches, setNiches] = useState<Niche[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
+  const [loadingNiches, setLoadingNiches] = useState(false);
+
   // Form state
   const [formData, setFormData] = useState({
     name: "", // Company/Organization name
-    industry: "", // Required
-    niche: "", // Required
+    category_id: "", // Required
+    niche_id: "", // Required
     city: "", // Required
     country: "", // Required
     phone: "", // Required
@@ -111,6 +117,41 @@ export default function BrandProfileCreationPage() {
     }
   }, [user, authLoading]);
 
+  // Fetch categories on mount
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const data = await categoryApi.getAll();
+        setCategories(data);
+      } catch (error) {
+        console.error("Failed to fetch categories:", error);
+      } finally {
+        setLoadingCategories(false);
+      }
+    }
+    fetchCategories();
+  }, []);
+
+  // Fetch niches when category changes
+  useEffect(() => {
+    async function fetchNiches() {
+      if (!formData.category_id) {
+        setNiches([]);
+        return;
+      }
+      setLoadingNiches(true);
+      try {
+        const data = await categoryApi.getNichesByCategory(formData.category_id);
+        setNiches(data);
+      } catch (error) {
+        console.error("Failed to fetch niches:", error);
+      } finally {
+        setLoadingNiches(false);
+      }
+    }
+    fetchNiches();
+  }, [formData.category_id]);
+
   // Real-time validation handler
   const handleFieldChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -120,12 +161,6 @@ export default function BrandProfileCreationPage() {
     switch (field) {
       case 'name':
         validation = validateName(value);
-        break;
-      case 'industry':
-        validation = validateIndustry(value);
-        break;
-      case 'niche':
-        validation = validateNiche(value);
         break;
       case 'phone':
         validation = validatePhone(value);
@@ -176,8 +211,8 @@ export default function BrandProfileCreationPage() {
   const handleSubmit = async () => {
     // Validate all required fields
     const nameValidation = validateName(formData.name);
-    const industryValidation = validateIndustry(formData.industry);
-    const nicheValidation = validateNiche(formData.niche);
+    const categoryValidation = validateCategoryId(formData.category_id);
+    const nicheValidation = validateNicheId(formData.niche_id);
     const phoneValidation = validatePhone(formData.phone);
     const countryValidation = validateCountry(formData.country);
     const cityValidation = validateCity(formData.city, formData.country);
@@ -185,8 +220,8 @@ export default function BrandProfileCreationPage() {
     // Collect all errors
     const allErrors: Record<string, string> = {};
     if (!nameValidation.isValid) allErrors.name = nameValidation.error!;
-    if (!industryValidation.isValid) allErrors.industry = industryValidation.error!;
-    if (!nicheValidation.isValid) allErrors.niche = nicheValidation.error!;
+    if (!categoryValidation.isValid) allErrors.category_id = categoryValidation.error!;
+    if (!nicheValidation.isValid) allErrors.niche_id = nicheValidation.error!;
     if (!phoneValidation.isValid) allErrors.phone = phoneValidation.error!;
     if (!countryValidation.isValid) allErrors.country = countryValidation.error!;
     if (!cityValidation.isValid) allErrors.city = cityValidation.error!;
@@ -261,22 +296,29 @@ export default function BrandProfileCreationPage() {
         }
       }
 
+      // Resolve names for backward compatibility
+      const selectedCategory = categories.find(c => c.id === formData.category_id);
+      const selectedNiche = niches.find(n => n.id === formData.niche_id);
+
       await profileApi.create({
         user_id: user?.id,
         name: formData.name.trim(),
-        title: formData.companySize || null, // Use company size as title
-        industry: formData.industry.trim(), // Required
-        niche: formData.niche.trim(), // Required
-        city: formData.city, // Required
-        country: formData.country, // Required
-        phone: formData.phone.trim(), // Required
+        title: formData.companySize || null,
+        profile_type: 'organization',
+        category_id: formData.category_id || null,
+        niche_id: formData.niche_id || null,
+        industry: selectedCategory?.name || '', // backward compat
+        niche: selectedNiche?.name || '', // backward compat
+        city: formData.city,
+        country: formData.country,
+        phone: formData.phone.trim(),
         bio: formData.bio.trim() || null,
         avatar_url: logoUrl,
-        follower_total: 0, // Brands don't have followers
-        collaboration_types: [], // Brands don't have collaboration types
+        follower_total: 0,
+        collaboration_types: [],
         video_intro_url: null,
         social_links: socialLinks,
-        role: 'organization', // Brand role
+        role: 'organization',
         status: 'pending',
         profile_completion: calculateCompletion(),
       });
@@ -302,10 +344,10 @@ export default function BrandProfileCreationPage() {
   const calculateCompletion = () => {
     let score = 0;
     if (formData.name && !errors.name) score += 15;
-    if (formData.industry && !errors.industry) score += 12; // Required
-    if (formData.niche && !errors.niche) score += 12; // Required
-    if (formData.phone && !errors.phone) score += 10; // Required
-    if (formData.city && formData.country && !errors.city && !errors.country) score += 10; // Required
+    if (formData.category_id) score += 12;
+    if (formData.niche_id) score += 12;
+    if (formData.phone && !errors.phone) score += 10;
+    if (formData.city && formData.country && !errors.city && !errors.country) score += 10;
     if (formData.companySize) score += 8;
     if (formData.website && !errors.website) score += 8;
     if (formData.bio) score += 15;
@@ -380,8 +422,8 @@ export default function BrandProfileCreationPage() {
                     <Button onClick={() => {
                       setFormData({
                         name: existingProfile.name,
-                        industry: existingProfile.industry || "",
-                        niche: existingProfile.niche || "",
+                        category_id: existingProfile.category_id || "",
+                        niche_id: existingProfile.niche_id || "",
                         city: existingProfile.city || "",
                         country: existingProfile.country || "",
                         phone: existingProfile.phone || "",
@@ -475,45 +517,50 @@ export default function BrandProfileCreationPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="industry">Industry *</Label>
-                    <Input
-                      id="industry"
-                      placeholder="e.g., Technology, Fashion, Food, Education"
-                      value={formData.industry}
-                      onChange={(e) => handleFieldChange('industry', e.target.value)}
-                      onBlur={() => {
-                        const validation = validateIndustry(formData.industry);
-                        if (!validation.isValid) {
-                          setErrors(prev => ({ ...prev, industry: validation.error || '' }));
-                        }
+                    <Label>Category *</Label>
+                    <Select
+                      value={formData.category_id}
+                      onValueChange={(value) => {
+                        setFormData(prev => ({ ...prev, category_id: value, niche_id: '' }));
+                        const result = validateCategoryId(value);
+                        setErrors(prev => ({ ...prev, category_id: result.error || '', niche_id: '' }));
                       }}
-                      required
-                      className={errors.industry ? "border-red-500" : ""}
-                      data-testid="input-industry"
-                    />
-                    {errors.industry && (
-                      <p className="text-xs text-red-500">{errors.industry}</p>
+                    >
+                      <SelectTrigger data-testid="select-category">
+                        <SelectValue placeholder={loadingCategories ? "Loading..." : "Select category"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map((cat) => (
+                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.category_id && (
+                      <p className="text-xs text-red-500">{errors.category_id}</p>
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="niche">Niche *</Label>
-                    <Input
-                      id="niche"
-                      placeholder="e.g., SaaS, Streetwear, Fine Dining, EdTech"
-                      value={formData.niche}
-                      onChange={(e) => handleFieldChange('niche', e.target.value)}
-                      onBlur={() => {
-                        const validation = validateNiche(formData.niche);
-                        if (!validation.isValid) {
-                          setErrors(prev => ({ ...prev, niche: validation.error || '' }));
-                        }
+                    <Label>Niche *</Label>
+                    <Select
+                      value={formData.niche_id}
+                      onValueChange={(value) => {
+                        setFormData(prev => ({ ...prev, niche_id: value }));
+                        const result = validateNicheId(value);
+                        setErrors(prev => ({ ...prev, niche_id: result.error || '' }));
                       }}
-                      required
-                      className={errors.niche ? "border-red-500" : ""}
-                      data-testid="input-niche"
-                    />
-                    {errors.niche && (
-                      <p className="text-xs text-red-500">{errors.niche}</p>
+                      disabled={!formData.category_id || loadingNiches}
+                    >
+                      <SelectTrigger data-testid="select-niche">
+                        <SelectValue placeholder={loadingNiches ? "Loading..." : !formData.category_id ? "Select category first" : "Select niche"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {niches.map((n) => (
+                          <SelectItem key={n.id} value={n.id}>{n.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.niche_id && (
+                      <p className="text-xs text-red-500">{errors.niche_id}</p>
                     )}
                   </div>
                 </div>
@@ -768,12 +815,12 @@ export default function BrandProfileCreationPage() {
                       <p className="font-medium">{formData.companySize || "Not provided"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground mb-1">Industry</p>
-                      <p className="font-medium">{formData.industry || "Not provided"}</p>
+                      <p className="text-xs text-muted-foreground mb-1">Category</p>
+                      <p className="font-medium">{categories.find(c => c.id === formData.category_id)?.name || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Niche</p>
-                      <p className="font-medium">{formData.niche || "Not provided"}</p>
+                      <p className="font-medium">{niches.find(n => n.id === formData.niche_id)?.name || "Not provided"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground mb-1">Location</p>
