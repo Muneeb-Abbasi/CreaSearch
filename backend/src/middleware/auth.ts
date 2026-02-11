@@ -64,14 +64,14 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
 
         req.user = user;
 
-        // Check if user has admin role in profiles table
-        const { data: profile, error: profileError } = await supabase
-            .from('profiles')
+        // Check if user has admin role in users table
+        const { data: userRecord, error: userError } = await supabase
+            .from('users')
             .select('role')
-            .eq('user_id', user.id)
+            .eq('id', user.id)
             .single();
 
-        if (profileError || profile?.role !== 'admin') {
+        if (userError || userRecord?.role !== 'admin') {
             return res.status(403).json({ error: 'Admin access required' });
         }
 
