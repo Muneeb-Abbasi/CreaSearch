@@ -258,6 +258,7 @@ export default function SearchPage() {
           category_id: categoryFilter || undefined,
           niche_id: nicheFilter || undefined,
           collaborationType: selectedTypes[0] || undefined,
+          minFollowers: followerRange[0] > 0 ? followerRange[0] * 1000 : undefined,
         });
         // Transform API profiles to match component format
         const transformed = profiles.map((profile: Profile, index: number) => ({

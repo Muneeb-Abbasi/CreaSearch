@@ -33,6 +33,7 @@ export interface Profile {
     social_links?: Record<string, any>;
     verified_socials?: string[];
     gigs_completed?: number;
+    social_accounts?: SocialAccount[];
 }
 
 export interface Category {

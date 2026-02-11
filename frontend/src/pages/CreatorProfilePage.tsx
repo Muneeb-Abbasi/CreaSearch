@@ -134,7 +134,7 @@ export default function CreatorProfilePage() {
           followerCount={profile.follower_total || 0}
           completedGigs={profile.gigs_completed || 0}
           tags={profile.collaboration_types || []}
-          socialLinks={profile.social_links as { youtube?: string; instagram?: string; linkedin?: string; twitter?: string } | undefined}
+          socialLinks={profile.social_links as unknown as { youtube?: string; instagram?: string; linkedin?: string; twitter?: string } | undefined}
           onInquiryClick={() => setInquiryModalOpen(true)}
         />
 

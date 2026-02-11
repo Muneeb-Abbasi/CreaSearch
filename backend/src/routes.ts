@@ -238,9 +238,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/approve/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const profile = await profileService.approve(req.params.id);
+      const adminUserId = (req as any).user.id;
 
       // Recalculate Creasearch score after approval
       await scoringService.updateProfileScore(profile.id);
+
+      // Log admin action
+      await adminActionLogService.create({
+        admin_user_id: adminUserId,
+        action: 'approve_profile',
+        target_type: 'profile',
+        target_id: profile.id,
+        details: {
+          profile_name: profile.name,
+          profile_type: profile.profile_type
+        }
+      });
+
+      // Send in-app notification
+      await notificationService.create({
+        user_id: profile.user_id,
+        type: 'profile_approved',
+        title: 'Profile Approved!',
+        message: `Your profile "${profile.name}" has been approved and is now live on Creasearch.`,
+        metadata: { profile_id: profile.id }
+      });
 
       emailService.sendProfileApprovedEmail(profile.user_id, profile.name)
         .catch(err => console.error('[Email] Failed to send approval email:', err));
@@ -255,6 +277,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/reject/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
       const profile = await profileService.reject(req.params.id);
+      const adminUserId = (req as any).user.id;
+      const { reason } = req.body; // Capture rejection reason if provided
+
+      // Log admin action
+      await adminActionLogService.create({
+        admin_user_id: adminUserId,
+        action: 'reject_profile',
+        target_type: 'profile',
+        target_id: profile.id,
+        details: {
+          profile_name: profile.name,
+          reason: reason || 'No reason provided'
+        }
+      });
+
+      // Send in-app notification
+      await notificationService.create({
+        user_id: profile.user_id,
+        type: 'profile_rejected',
+        title: 'Profile Rejected',
+        message: `Your profile "${profile.name}" was not approved.${reason ? ` Reason: ${reason}` : ''}`,
+        metadata: { profile_id: profile.id, reason }
+      });
+
       emailService.sendProfileRejectedEmail(profile.user_id, profile.name)
         .catch(err => console.error('[Email] Failed to send rejection email:', err));
       res.json(profile);

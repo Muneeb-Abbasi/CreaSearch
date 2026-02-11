@@ -119,14 +119,20 @@ export interface ProfileFilters {
 export const profileService = {
     async getAll(filters: ProfileFilters = {}): Promise<Profile[]> {
         const supabase = getSupabaseClient();
-        let query = supabase
-            .from('profiles')
-            .select('*')
-            .eq('status', filters.status || 'approved');
+        let query;
 
+        // Start with RPC if search is present, otherwise standard select
         if (filters.search) {
-            query = query.or(`name.ilike.%${filters.search}%,title.ilike.%${filters.search}%,bio.ilike.%${filters.search}%`);
+            query = supabase.rpc('search_profiles', { query_text: filters.search });
+        } else {
+            query = supabase.from('profiles').select('*');
         }
+
+        // Apply filters to the result (RPC returns SETOF profiles, so chaining works)
+        query = query.eq('status', filters.status || 'approved');
+
+        // Reuse existing filter logic (filters.search is already handled above/ignored here)
+        // if (filters.search) { ... } -> Removed manual ilike search
 
         if (filters.country) {
             query = query.eq('country', filters.country);
