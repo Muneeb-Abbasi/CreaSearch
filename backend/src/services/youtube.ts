@@ -108,7 +108,9 @@ export async function verifyYouTubeChannel(channelUrl: string): Promise<YouTubeV
     }
 
     try {
+        console.log(`[YouTube] Verifying channel URL: ${channelUrl}`);
         const channelId = await getChannelId(channelUrl);
+        console.log(`[YouTube] Resolved channel ID: ${channelId}`);
 
         if (!channelId) {
             return {

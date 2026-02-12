@@ -208,6 +208,86 @@ export default function BrandProfileCreationPage() {
     }
   };
 
+  const validateStep1 = () => {
+    const nameVal = validateName(formData.name);
+    const catVal = validateCategoryId(formData.category_id);
+    const nicheVal = validateNicheId(formData.niche_id);
+    const countryVal = validateCountry(formData.country);
+    const cityVal = validateCity(formData.city, formData.country);
+    const phoneVal = validatePhone(formData.phone);
+    const websiteVal = validateUrl(formData.website, "Website URL");
+
+    const stepErrors: Record<string, string> = {};
+    if (!nameVal.isValid) stepErrors.name = nameVal.error!;
+    if (!catVal.isValid) stepErrors.category_id = catVal.error!;
+    if (!nicheVal.isValid) stepErrors.niche_id = nicheVal.error!;
+    if (!countryVal.isValid) stepErrors.country = countryVal.error!;
+    if (!cityVal.isValid) stepErrors.city = cityVal.error!;
+    if (!phoneVal.isValid) stepErrors.phone = phoneVal.error!;
+    if (!formData.companySize) stepErrors.companySize = "Company size is required";
+    if (!websiteVal.isValid) stepErrors.website = websiteVal.error!;
+    if (!formData.bio) stepErrors.bio = "Company description is required";
+
+    setErrors(stepErrors);
+    return Object.keys(stepErrors).length === 0;
+  };
+
+  const validateStep2 = () => {
+    if (!logoFile && !existingProfile?.avatar_url) {
+      toast({
+        title: "Logo required",
+        description: "Please upload a company logo",
+        variant: "destructive"
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const validateStep3 = () => {
+    const socialCount = [
+      formData.linkedin,
+      formData.twitter,
+      formData.facebook,
+      formData.instagram
+    ].filter(url => url && url.trim().length > 0).length;
+
+    if (socialCount < 2) {
+      toast({
+        title: "More social accounts required",
+        description: "Please provide at least 2 social media links",
+        variant: "destructive"
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const handleNextStep = () => {
+    let isValid = false;
+    if (currentStep === 1) isValid = validateStep1();
+    if (currentStep === 2) isValid = validateStep2();
+    if (currentStep === 3) isValid = validateStep3();
+
+    if (isValid) {
+      setCurrentStep(prev => Math.min(prev + 1, totalSteps));
+      window.scrollTo(0, 0);
+    } else {
+      if (currentStep === 1) {
+        toast({
+          title: "Please complete step 1",
+          description: "Fill in all required fields correctly",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const handlePrevStep = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+    window.scrollTo(0, 0);
+  };
+
   const handleSubmit = async () => {
     // Validate all required fields
     const nameValidation = validateName(formData.name);
@@ -583,9 +663,12 @@ export default function BrandProfileCreationPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="company-size">Company Size</Label>
-                  <Select value={formData.companySize} onValueChange={(value) => setFormData({ ...formData, companySize: value })}>
-                    <SelectTrigger>
+                  <Label htmlFor="company-size" className={errors.companySize ? "text-red-500" : ""}>Company Size *</Label>
+                  <Select value={formData.companySize} onValueChange={(value) => {
+                    setFormData({ ...formData, companySize: value });
+                    if (value) setErrors(prev => ({ ...prev, companySize: '' }));
+                  }}>
+                    <SelectTrigger className={errors.companySize ? "border-red-500" : ""}>
                       <SelectValue placeholder="Select company size" />
                     </SelectTrigger>
                     <SelectContent>
@@ -596,6 +679,7 @@ export default function BrandProfileCreationPage() {
                       <SelectItem value="enterprise">Enterprise (1000+ employees)</SelectItem>
                     </SelectContent>
                   </Select>
+                  {errors.companySize && <p className="text-xs text-red-500">{errors.companySize}</p>}
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -878,37 +962,32 @@ export default function BrandProfileCreationPage() {
             </Card>
           )}
 
+          {/* Move navigation buttons outside cards */}
           <div className="flex justify-between mt-8">
             <Button
               variant="outline"
-              onClick={() => setCurrentStep(Math.max(1, currentStep - 1))}
-              disabled={currentStep === 1}
-              data-testid="button-previous"
+              onClick={handlePrevStep}
+              disabled={currentStep === 1 || isSubmitting}
             >
               Previous
             </Button>
-            <Button
-              onClick={() => {
-                if (currentStep < totalSteps) {
-                  setCurrentStep(currentStep + 1);
-                } else {
-                  handleSubmit();
-                }
-              }}
-              disabled={isSubmitting}
-              data-testid="button-next"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Submitting...
-                </>
-              ) : currentStep === totalSteps ? (
-                "Submit for Review"
-              ) : (
-                "Next"
-              )}
-            </Button>
+
+            {currentStep < 4 ? (
+              <Button onClick={handleNextStep}>
+                Next Step
+              </Button>
+            ) : (
+              <Button onClick={handleSubmit} disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  "Submit Profile"
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </main>
