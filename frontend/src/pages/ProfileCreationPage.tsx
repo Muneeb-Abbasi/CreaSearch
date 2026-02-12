@@ -209,11 +209,40 @@ export default function ProfileCreationPage() {
       return;
     }
 
-    // Check required YouTube URL
-    if (!formData.youtube) {
+    // Check required Video Intro URL (generic)
+    if (!formData.videoIntroUrl) {
       toast({
-        title: "YouTube video required",
-        description: "Please provide a YouTube video introduction URL",
+        title: "Video introduction required",
+        description: "Please provide a link to your video introduction",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate video URL format
+    const { validateUrl } = await import("@/utils/validation");
+    const videoUrlValidation = validateUrl(formData.videoIntroUrl, "Video URL");
+    if (!videoUrlValidation.isValid) {
+      toast({
+        title: "Invalid Video URL",
+        description: videoUrlValidation.error,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check for at least 2 social accounts
+    const socialCount = [
+      formData.youtube,
+      formData.instagram,
+      formData.linkedin,
+      formData.twitter
+    ].filter(url => url && url.trim().length > 0).length;
+
+    if (socialCount < 2) {
+      toast({
+        title: "More social accounts required",
+        description: "Please connect at least 2 social media accounts to verify your profile",
         variant: "destructive"
       });
       return;
@@ -286,20 +315,23 @@ export default function ProfileCreationPage() {
       // Verify YouTube channel immediately if provided
       if (formData.youtube && createdProfile.id) {
         try {
-          const { verificationApi } = await import("@/lib/api");
-          const ytResult = await verificationApi.verifyYouTube(formData.youtube, createdProfile.id);
+          // Check if it looks like a YouTube URL before trying to verify API
+          if (formData.youtube.includes('youtube.com') || formData.youtube.includes('youtu.be')) {
+            const { verificationApi } = await import("@/lib/api");
+            const ytResult = await verificationApi.verifyYouTube(formData.youtube, createdProfile.id);
 
-          if (ytResult.success) {
-            toast({
-              title: "YouTube Verified!",
-              description: `Channel: ${ytResult.channelTitle} • ${ytResult.subscribers?.toLocaleString()} subscribers`,
-            });
-          } else if (ytResult.status === 'HIDDEN') {
-            toast({
-              title: "YouTube Subscriber Count Hidden",
-              description: "Your channel was found but subscriber count is hidden.",
-              variant: "destructive"
-            });
+            if (ytResult.success) {
+              toast({
+                title: "YouTube Verified!",
+                description: `Channel: ${ytResult.channelTitle} • ${ytResult.subscribers?.toLocaleString()} subscribers`,
+              });
+            } else if (ytResult.status === 'HIDDEN') {
+              toast({
+                title: "YouTube Subscriber Count Hidden",
+                description: "Your channel was found but subscriber count is hidden.",
+                variant: "destructive"
+              });
+            }
           }
         } catch (ytError) {
           console.error("YouTube verification failed:", ytError);
@@ -702,7 +734,7 @@ export default function ProfileCreationPage() {
                     Paste a YouTube/Vimeo link:
                   </p>
                   <Input
-                    placeholder="https://youtube.com/..."
+                    placeholder="https://youtube.com/..., https://vimeo.com/..., or any video link"
                     value={formData.videoIntroUrl}
                     onChange={(e) => setFormData({ ...formData, videoIntroUrl: e.target.value })}
                     data-testid="input-video-url"

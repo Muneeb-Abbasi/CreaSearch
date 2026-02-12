@@ -259,6 +259,23 @@ export default function BrandProfileCreationPage() {
       return;
     }
 
+    // Check for at least 2 social accounts (excluding website as it's required separately)
+    const socialCount = [
+      formData.linkedin,
+      formData.twitter,
+      formData.facebook,
+      formData.instagram
+    ].filter(url => url && url.trim().length > 0).length;
+
+    if (socialCount < 2) {
+      toast({
+        title: "More social accounts required",
+        description: "Please provide at least 2 social media links (LinkedIn, Twitter, Facebook, or Instagram)",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.agreedToTerms) {
       toast({
         title: "Please agree to terms",

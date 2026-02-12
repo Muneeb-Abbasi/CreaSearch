@@ -40,10 +40,38 @@ export function Header() {
             <Link href="/search" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-search">
               Find Creators
             </Link>
-            <a href="/#how-it-works" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-how-it-works">
+            <a
+              href="/#how-it-works"
+              className="text-sm font-medium hover:text-primary transition-colors"
+              data-testid="link-how-it-works"
+              onClick={(e) => {
+                // If we are already on home page, simple scroll will happen by default behavior or we can force it
+                if (window.location.pathname !== "/") {
+                  // Allow default behavior to navigate to /#hash
+                } else {
+                  // We are on home page, smooth scroll manually if needed
+                  e.preventDefault();
+                  document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth" });
+                  window.history.pushState(null, "", "/#how-it-works");
+                }
+              }}
+            >
               How It Works
             </a>
-            <a href="/#pricing" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-pricing">
+            <a
+              href="/#pricing"
+              className="text-sm font-medium hover:text-primary transition-colors"
+              data-testid="link-pricing"
+              onClick={(e) => {
+                if (window.location.pathname !== "/") {
+                  // Allow navigation
+                } else {
+                  e.preventDefault();
+                  document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
+                  window.history.pushState(null, "", "/#pricing");
+                }
+              }}
+            >
               Pricing
             </a>
           </nav>
