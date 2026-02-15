@@ -467,3 +467,49 @@ export const featuredProfileApi = {
     },
 };
 
+// ============= COLLABORATION API =============
+
+export interface Collaboration {
+    id: string;
+    requester_profile_id: string;
+    partner_profile_id: string;
+    description: string;
+    proof_url: string | null;
+    status: 'pending' | 'approved' | 'rejected';
+    admin_notes: string | null;
+    approved_by: string | null;
+    approved_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export const collaborationApi = {
+    async create(data: { requester_profile_id: string; partner_profile_id: string; description: string; proof_url?: string }): Promise<Collaboration> {
+        return fetchWithError<Collaboration>(`${API_BASE}/collaborations`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async getByProfileId(profileId: string): Promise<Collaboration[]> {
+        return fetchWithError<Collaboration[]>(`${API_BASE}/collaborations/profile/${profileId}`);
+    },
+
+    async getPending(): Promise<Collaboration[]> {
+        return fetchWithError<Collaboration[]>(`${API_BASE}/admin/collaborations/pending`);
+    },
+
+    async approve(id: string, adminNotes?: string): Promise<Collaboration> {
+        return fetchWithError<Collaboration>(`${API_BASE}/admin/collaborations/${id}/approve`, {
+            method: 'PUT',
+            body: JSON.stringify({ admin_notes: adminNotes }),
+        });
+    },
+
+    async reject(id: string, adminNotes?: string): Promise<Collaboration> {
+        return fetchWithError<Collaboration>(`${API_BASE}/admin/collaborations/${id}/reject`, {
+            method: 'PUT',
+            body: JSON.stringify({ admin_notes: adminNotes }),
+        });
+    },
+};

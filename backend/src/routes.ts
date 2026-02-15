@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
-import { profileService, reviewService, scoringService, categoryService, socialAccountService, notificationService, adminActionLogService, featuredProfileService, ProfileFilters } from "./services/database";
+import { profileService, reviewService, scoringService, categoryService, socialAccountService, notificationService, adminActionLogService, featuredProfileService, collaborationService, ProfileFilters } from "./services/database";
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
 import { requireAuth, requireAdmin } from "./middleware/auth";
@@ -185,6 +185,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Allow if user owns profile or is admin (TODO: implement robust admin check)
       if (existingProfile.user_id !== userId) {
         return res.status(403).json({ error: "Unauthorized to update this profile" });
+      }
+
+      // If profile was rejected, allow resubmission as pending
+      if (existingProfile.status === 'rejected' && req.body.status === 'pending') {
+        req.body.status = 'pending';
+      } else {
+        // Don't allow users to change status otherwise
+        delete req.body.status;
       }
 
       const profile = await profileService.update(profileId, req.body);
@@ -803,6 +811,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error unfeaturing profile:", error);
       res.status(500).json({ error: "Failed to unfeature profile" });
+    }
+  });
+
+  // ============= COLLABORATION ROUTES =============
+
+  // POST /api/collaborations - Submit a collaboration request
+  app.post("/api/collaborations", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { requester_profile_id, partner_profile_id, description, proof_url } = req.body;
+
+      if (!requester_profile_id || !partner_profile_id || !description) {
+        return res.status(400).json({ error: "Missing required fields: requester_profile_id, partner_profile_id, description" });
+      }
+
+      // Verify the requester owns the profile
+      const requesterProfile = await profileService.getById(requester_profile_id);
+      if (!requesterProfile || requesterProfile.user_id !== req.user.id) {
+        return res.status(403).json({ error: "You can only submit collaborations from your own profile" });
+      }
+
+      // Verify the partner profile exists
+      const partnerProfile = await profileService.getById(partner_profile_id);
+      if (!partnerProfile) {
+        return res.status(404).json({ error: "Partner profile not found" });
+      }
+
+      const collab = await collaborationService.create({
+        requester_profile_id,
+        partner_profile_id,
+        description,
+        proof_url: proof_url || null,
+      });
+
+      res.status(201).json(collab);
+    } catch (error) {
+      console.error("Error creating collaboration:", error);
+      res.status(500).json({ error: "Failed to create collaboration request" });
+    }
+  });
+
+  // GET /api/collaborations/profile/:id - Get collaborations for a profile
+  app.get("/api/collaborations/profile/:id", async (req: Request, res: Response) => {
+    try {
+      const collabs = await collaborationService.getByProfileId(req.params.id);
+      res.json(collabs);
+    } catch (error) {
+      console.error("Error fetching collaborations:", error);
+      res.status(500).json({ error: "Failed to fetch collaborations" });
+    }
+  });
+
+  // GET /api/admin/collaborations/pending - Admin: get pending collaborations
+  app.get("/api/admin/collaborations/pending", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const collabs = await collaborationService.getPending();
+      res.json(collabs);
+    } catch (error) {
+      console.error("Error fetching pending collaborations:", error);
+      res.status(500).json({ error: "Failed to fetch pending collaborations" });
+    }
+  });
+
+  // PUT /api/admin/collaborations/:id/approve - Admin: approve collaboration
+  app.put("/api/admin/collaborations/:id/approve", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const adminUserId = req.user.id;
+      const { admin_notes } = req.body;
+
+      const collab = await collaborationService.approve(req.params.id, adminUserId, admin_notes);
+
+      // Recalculate scores for both profiles
+      await scoringService.updateProfileScore(collab.requester_profile_id);
+      await scoringService.updateProfileScore(collab.partner_profile_id);
+
+      // Log admin action
+      await adminActionLogService.create({
+        admin_user_id: adminUserId,
+        action: 'approve_collaboration',
+        target_type: 'profile',
+        target_id: req.params.id,
+        details: { requester: collab.requester_profile_id, partner: collab.partner_profile_id }
+      });
+
+      res.json(collab);
+    } catch (error) {
+      console.error("Error approving collaboration:", error);
+      res.status(500).json({ error: "Failed to approve collaboration" });
+    }
+  });
+
+  // PUT /api/admin/collaborations/:id/reject - Admin: reject collaboration
+  app.put("/api/admin/collaborations/:id/reject", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const adminUserId = req.user.id;
+      const { admin_notes } = req.body;
+
+      const collab = await collaborationService.reject(req.params.id, adminUserId, admin_notes);
+
+      // Log admin action
+      await adminActionLogService.create({
+        admin_user_id: adminUserId,
+        action: 'reject_collaboration',
+        target_type: 'profile',
+        target_id: req.params.id,
+        details: { requester: collab.requester_profile_id, partner: collab.partner_profile_id }
+      });
+
+      res.json(collab);
+    } catch (error) {
+      console.error("Error rejecting collaboration:", error);
+      res.status(500).json({ error: "Failed to reject collaboration" });
     }
   });
 

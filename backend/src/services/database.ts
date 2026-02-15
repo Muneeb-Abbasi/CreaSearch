@@ -432,11 +432,12 @@ export const reviewService = {
 // Scoring Service - Calculates and updates Creasearch Score
 export const scoringService = {
     /**
-     * Calculate Creasearch Score (0-100) based on 4 factors:
+     * Calculate Creasearch Score (0-100) based on 5 factors:
      * 1. Profile Completion (30 pts)
      * 2. Social Verification (20 pts) - YouTube & Instagram only
      * 3. Follower Count (25 pts) - From verified accounts
      * 4. Reputation (25 pts) - Reviews
+     * 5. Collaborations (10 pts bonus) - Approved collaborations
      */
     calculateScore(profile: Profile, socialAccounts: SocialAccount[] = [], reviewCount: number = 0): number {
         let score = 0;
@@ -472,6 +473,10 @@ export const scoringService = {
         const ratingPoints = Math.min(avgRating * 4, 20); // Max 20 from rating (5 stars × 4)
         const reviewPoints = Math.min(reviewCount / 2, 5); // Max 5 from review count
         score += ratingPoints + reviewPoints;
+
+        // 5. Collaborations (Max 10 bonus points)
+        const collabCount = (profile as any).collaboration_count || 0;
+        score += Math.min(collabCount * 2, 10); // 2 pts per collab, max 10
 
         return Math.round(Math.min(score, 100)); // Cap at 100
     },
@@ -814,3 +819,124 @@ export const featuredProfileService = {
     }
 };
 
+// ============================================
+// Collaboration types and service
+// ============================================
+
+export interface Collaboration {
+    id: string;
+    requester_profile_id: string;
+    partner_profile_id: string;
+    description: string;
+    proof_url: string | null;
+    status: 'pending' | 'approved' | 'rejected';
+    admin_notes: string | null;
+    approved_by: string | null;
+    approved_at: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export const collaborationService = {
+    async create(collab: Omit<Collaboration, 'id' | 'status' | 'admin_notes' | 'approved_by' | 'approved_at' | 'created_at' | 'updated_at'>): Promise<Collaboration> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('collaborations')
+            .insert(collab)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async getById(id: string): Promise<Collaboration | null> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('collaborations')
+            .select('*')
+            .eq('id', id)
+            .maybeSingle();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async getByProfileId(profileId: string): Promise<Collaboration[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('collaborations')
+            .select('*')
+            .or(`requester_profile_id.eq.${profileId},partner_profile_id.eq.${profileId}`)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getPending(): Promise<Collaboration[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('collaborations')
+            .select('*')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async approve(id: string, adminUserId: string, adminNotes?: string): Promise<Collaboration> {
+        const supabase = getSupabaseClient();
+
+        // Get the collaboration first
+        const collab = await this.getById(id);
+        if (!collab) throw new Error('Collaboration not found');
+        if (collab.status !== 'pending') throw new Error('Collaboration is not pending');
+
+        // Update collaboration status
+        const { data, error } = await supabase
+            .from('collaborations')
+            .update({
+                status: 'approved',
+                approved_by: adminUserId,
+                approved_at: new Date().toISOString(),
+                admin_notes: adminNotes || null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Increment collaboration_count for both profiles
+        await supabase.rpc('increment_collab_count', { profile_id_param: collab.requester_profile_id });
+        await supabase.rpc('increment_collab_count', { profile_id_param: collab.partner_profile_id });
+
+        return data;
+    },
+
+    async reject(id: string, adminUserId: string, adminNotes?: string): Promise<Collaboration> {
+        const supabase = getSupabaseClient();
+
+        const collab = await this.getById(id);
+        if (!collab) throw new Error('Collaboration not found');
+        if (collab.status !== 'pending') throw new Error('Collaboration is not pending');
+
+        const { data, error } = await supabase
+            .from('collaborations')
+            .update({
+                status: 'rejected',
+                approved_by: adminUserId,
+                admin_notes: adminNotes || null,
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    }
+};

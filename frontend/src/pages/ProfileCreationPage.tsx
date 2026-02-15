@@ -301,8 +301,8 @@ const handlePrevStep = () => {
 };
 
 const handleSubmit = async () => {
-  // Check required photo
-  if (!photoFile) {
+  // Check required photo (skip if resubmitting a rejected profile that already has a photo)
+  if (!photoFile && !(existingProfile?.status === 'rejected' && existingProfile?.avatar_url)) {
     toast({
       title: "Photo required",
       description: "Please upload a profile photo before submitting",
@@ -390,11 +390,10 @@ const handleSubmit = async () => {
     const selectedCategory = categories.find(c => c.id === formData.category_id);
     const selectedNiche = niches.find(n => n.id === formData.niche_id);
 
-    const createdProfile = await profileApi.create({
-      user_id: user?.id,
+    const profilePayload = {
       name: formData.name,
       title: formData.title,
-      profile_type: 'creator',
+      profile_type: 'creator' as const,
       category_id: formData.category_id || null,
       niche_id: formData.niche_id || null,
       industry: selectedCategory?.name || '', // backward compat
@@ -404,7 +403,7 @@ const handleSubmit = async () => {
       phone: formData.phone,
       location: `${formData.city}, ${getCountryName(formData.country)}`,
       bio: formData.bio,
-      avatar_url: avatarUrl,
+      avatar_url: avatarUrl || existingProfile?.avatar_url || null,
       follower_total: 0,
       collaboration_types: formData.collaborationTypes,
       video_intro_url: formData.videoIntroUrl || null,
@@ -412,7 +411,18 @@ const handleSubmit = async () => {
       role: 'creator',
       status: 'pending',
       profile_completion: calculateCompletion(),
-    });
+    };
+
+    // If a rejected profile exists, update it instead of creating a new one
+    let createdProfile;
+    if (existingProfile && existingProfile.status === 'rejected') {
+      createdProfile = await profileApi.update(existingProfile.id, profilePayload);
+    } else {
+      createdProfile = await profileApi.create({
+        user_id: user?.id,
+        ...profilePayload,
+      });
+    }
 
     // Verify YouTube channel immediately if provided
     if (formData.youtube && createdProfile.id) {

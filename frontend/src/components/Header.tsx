@@ -40,6 +40,9 @@ export function Header() {
             <Link href="/search" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-search">
               Find Creators
             </Link>
+            <Link href="/brands" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-brands">
+              Find Brands
+            </Link>
             <a
               href="/#how-it-works"
               className="text-sm font-medium hover:text-primary transition-colors"
@@ -146,6 +149,9 @@ export function Header() {
             <nav className="flex flex-col space-y-4">
               <Link href="/search" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-search">
                 Find Creators
+              </Link>
+              <Link href="/brands" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-brands">
+                Find Brands
               </Link>
               <a href="/#how-it-works" className="text-sm font-medium hover:text-primary transition-colors" data-testid="link-mobile-how-it-works">
                 How It Works

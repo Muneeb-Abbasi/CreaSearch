@@ -319,8 +319,8 @@ export default function BrandProfileCreationPage() {
       return;
     }
 
-    // Check required logo
-    if (!logoFile) {
+    // Check required logo (skip if resubmitting a rejected profile that already has a logo)
+    if (!logoFile && !(existingProfile?.status === 'rejected' && existingProfile?.avatar_url)) {
       toast({
         title: "Logo required",
         description: "Please upload a company logo before submitting",
@@ -397,11 +397,10 @@ export default function BrandProfileCreationPage() {
       const selectedCategory = categories.find(c => c.id === formData.category_id);
       const selectedNiche = niches.find(n => n.id === formData.niche_id);
 
-      await profileApi.create({
-        user_id: user?.id,
+      const profilePayload = {
         name: formData.name.trim(),
         title: formData.companySize || null,
-        profile_type: 'organization',
+        profile_type: 'organization' as const,
         category_id: formData.category_id || null,
         niche_id: formData.niche_id || null,
         industry: selectedCategory?.name || '', // backward compat
@@ -410,7 +409,7 @@ export default function BrandProfileCreationPage() {
         country: formData.country,
         phone: formData.phone.trim(),
         bio: formData.bio.trim() || null,
-        avatar_url: logoUrl,
+        avatar_url: logoUrl || existingProfile?.avatar_url || null,
         follower_total: 0,
         collaboration_types: [],
         video_intro_url: null,
@@ -418,7 +417,17 @@ export default function BrandProfileCreationPage() {
         role: 'organization',
         status: 'pending',
         profile_completion: calculateCompletion(),
-      });
+      };
+
+      // If a rejected profile exists, update it instead of creating a new one
+      if (existingProfile && existingProfile.status === 'rejected') {
+        await profileApi.update(existingProfile.id, profilePayload);
+      } else {
+        await profileApi.create({
+          user_id: user?.id,
+          ...profilePayload,
+        });
+      }
 
       toast({
         title: "Brand profile submitted!",

@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle, Star, ScrollText } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle, Star, ScrollText, Handshake } from "lucide-react";
 import { SiYoutube, SiInstagram } from "react-icons/si";
 import { useAuth } from "@/contexts/AuthContext";
-import { adminApi, profileApi, featuredProfileApi, Profile, type AdminActionLog } from "@/lib/api";
+import { adminApi, profileApi, featuredProfileApi, collaborationApi, Profile, type AdminActionLog, type Collaboration } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileDetailModal } from "@/components/ProfileDetailModal";
 
@@ -80,6 +80,8 @@ export default function AdminDashboardPage() {
   const [featureLoading, setFeatureLoading] = useState<string | null>(null);
   const [actionLogs, setActionLogs] = useState<AdminActionLog[]>([]);
   const [actionLogLoading, setActionLogLoading] = useState(false);
+  const [pendingCollabs, setPendingCollabs] = useState<Collaboration[]>([]);
+  const [collabLoading, setCollabLoading] = useState<string | null>(null);
 
   // Hardcoded admin emails (can access admin dashboard)
   const ADMIN_EMAILS = [
@@ -185,6 +187,41 @@ export default function AdminDashboardPage() {
       toast({ title: "Error", description: "Failed to load action log", variant: "destructive" });
     } finally {
       setActionLogLoading(false);
+    }
+  };
+
+  const fetchPendingCollabs = async () => {
+    try {
+      const collabs = await collaborationApi.getPending();
+      setPendingCollabs(collabs);
+    } catch {
+      // non-critical on initial load
+    }
+  };
+
+  const handleApproveCollab = async (collabId: string) => {
+    setCollabLoading(collabId);
+    try {
+      await collaborationApi.approve(collabId);
+      toast({ title: "Collaboration Approved", description: "Both profiles' collaboration counts have been incremented." });
+      setPendingCollabs(prev => prev.filter(c => c.id !== collabId));
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to approve collaboration", variant: "destructive" });
+    } finally {
+      setCollabLoading(null);
+    }
+  };
+
+  const handleRejectCollab = async (collabId: string) => {
+    setCollabLoading(collabId);
+    try {
+      await collaborationApi.reject(collabId);
+      toast({ title: "Collaboration Rejected", description: "The collaboration request has been rejected." });
+      setPendingCollabs(prev => prev.filter(c => c.id !== collabId));
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to reject collaboration", variant: "destructive" });
+    } finally {
+      setCollabLoading(null);
     }
   };
 
@@ -447,8 +484,8 @@ export default function AdminDashboardPage() {
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="users">All Profiles</TabsTrigger>
+                <TabsTrigger value="collaborations" onClick={() => pendingCollabs.length === 0 && fetchPendingCollabs()}>Collaborations</TabsTrigger>
                 <TabsTrigger value="action-log" onClick={() => actionLogs.length === 0 && fetchActionLogs()}>Action Log</TabsTrigger>
-                <TabsTrigger value="reports">Reports</TabsTrigger>
               </TabsList>
 
               <TabsContent value="verifications" className="mt-6">
@@ -691,6 +728,73 @@ export default function AdminDashboardPage() {
                               </div>
                             </div>
                             <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="collaborations" className="mt-6">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <Handshake className="w-5 h-5" />
+                        Pending Collaborations ({pendingCollabs.length})
+                      </CardTitle>
+                      <Button variant="outline" size="sm" onClick={fetchPendingCollabs}>
+                        <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {pendingCollabs.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Handshake className="w-12 h-12 mx-auto mb-4 opacity-40" />
+                        <p>No pending collaboration requests.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {pendingCollabs.map((collab) => (
+                          <div key={collab.id} className="p-4 border rounded-md space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium">
+                                  Requester: <span className="text-muted-foreground">{collab.requester_profile_id.slice(0, 8)}...</span>
+                                  {" → "}
+                                  Partner: <span className="text-muted-foreground">{collab.partner_profile_id.slice(0, 8)}...</span>
+                                </p>
+                                <p className="text-xs text-muted-foreground">Submitted {formatDate(collab.created_at)}</p>
+                              </div>
+                              <Badge variant="secondary">Pending</Badge>
+                            </div>
+                            <p className="text-sm">{collab.description}</p>
+                            {collab.proof_url && (
+                              <a href={collab.proof_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-500 underline">
+                                View Proof
+                              </a>
+                            )}
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => handleApproveCollab(collab.id)}
+                                disabled={collabLoading === collab.id}
+                              >
+                                {collabLoading === collab.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                                Approve
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleRejectCollab(collab.id)}
+                                disabled={collabLoading === collab.id}
+                              >
+                                {collabLoading === collab.id ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <XCircle className="w-4 h-4 mr-1" />}
+                                Reject
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>

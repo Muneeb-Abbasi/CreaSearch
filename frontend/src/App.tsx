@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import HomePage from "@/pages/HomePage";
 import SearchPage from "@/pages/SearchPage";
+import FindBrandsPage from "@/pages/FindBrandsPage";
 import CreatorProfilePage from "@/pages/CreatorProfilePage";
 import ProfileCreationPage from "@/pages/ProfileCreationPage";
 import BrandProfileCreationPage from "@/pages/BrandProfileCreationPage";
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/signup" component={LoginPage} />
       <Route path="/search" component={SearchPage} />
+      <Route path="/brands" component={FindBrandsPage} />
       <Route path="/creator/:id" component={CreatorProfilePage} />
       <Route path="/create-profile" component={ProfileCreationPage} />
       <Route path="/create-brand-profile" component={BrandProfileCreationPage} />
