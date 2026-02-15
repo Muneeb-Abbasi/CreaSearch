@@ -309,7 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { profile_id: profile.id, reason }
       });
 
-      emailService.sendProfileRejectedEmail(profile.user_id, profile.name)
+      emailService.sendProfileRejectedEmail(profile.user_id, profile.name, reason)
         .catch(err => console.error('[Email] Failed to send rejection email:', err));
       res.json(profile);
     } catch (error) {
@@ -894,6 +894,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: { requester: collab.requester_profile_id, partner: collab.partner_profile_id }
       });
 
+      // Send email notifications to both profiles
+      const [requesterProfile, partnerProfile] = await Promise.all([
+        profileService.getById(collab.requester_profile_id),
+        profileService.getById(collab.partner_profile_id),
+      ]);
+
+      if (requesterProfile && partnerProfile) {
+        emailService.sendCollaborationApprovedEmail(
+          requesterProfile.user_id, requesterProfile.name, partnerProfile.name, collab.description
+        ).catch(err => console.error('[Email] Failed to send collab approve email (requester):', err));
+
+        emailService.sendCollaborationApprovedEmail(
+          partnerProfile.user_id, partnerProfile.name, requesterProfile.name, collab.description
+        ).catch(err => console.error('[Email] Failed to send collab approve email (partner):', err));
+      }
+
       res.json(collab);
     } catch (error) {
       console.error("Error approving collaboration:", error);
@@ -917,6 +933,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         target_id: req.params.id,
         details: { requester: collab.requester_profile_id, partner: collab.partner_profile_id }
       });
+
+      // Send email notification to requester
+      const requesterProfile = await profileService.getById(collab.requester_profile_id);
+      const partnerProfile = await profileService.getById(collab.partner_profile_id);
+
+      if (requesterProfile && partnerProfile) {
+        emailService.sendCollaborationRejectedEmail(
+          requesterProfile.user_id, requesterProfile.name, partnerProfile.name, collab.description, admin_notes
+        ).catch(err => console.error('[Email] Failed to send collab rejection email:', err));
+      }
 
       res.json(collab);
     } catch (error) {
