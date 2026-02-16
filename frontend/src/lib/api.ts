@@ -230,6 +230,78 @@ export const adminApi = {
     },
 };
 
+// ============= Category / Niche Types =============
+
+export interface Category {
+    id: string;
+    name: string;
+    slug: string;
+    sort_order: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface Niche {
+    id: string;
+    category_id: string;
+    name: string;
+    slug: string;
+    sort_order: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+// ============= Admin Category/Niche API =============
+
+export const adminCategoryApi = {
+    // Categories
+    async getCategories(): Promise<Category[]> {
+        return fetchWithError<Category[]>(`${API_BASE}/admin/categories`);
+    },
+
+    async createCategory(data: { name: string; slug: string; sort_order?: number }): Promise<Category> {
+        return fetchWithError<Category>(`${API_BASE}/admin/categories`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async updateCategory(id: string, data: Partial<{ name: string; slug: string; sort_order: number; is_active: boolean }>): Promise<Category> {
+        return fetchWithError<Category>(`${API_BASE}/admin/categories/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async deleteCategory(id: string): Promise<void> {
+        await fetchWithError(`${API_BASE}/admin/categories/${id}`, { method: 'DELETE' });
+    },
+
+    // Niches
+    async getNiches(categoryId?: string): Promise<Niche[]> {
+        const qs = categoryId ? `?category_id=${categoryId}` : '';
+        return fetchWithError<Niche[]>(`${API_BASE}/admin/niches${qs}`);
+    },
+
+    async createNiche(data: { category_id: string; name: string; slug: string; sort_order?: number }): Promise<Niche> {
+        return fetchWithError<Niche>(`${API_BASE}/admin/niches`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async updateNiche(id: string, data: Partial<{ category_id: string; name: string; slug: string; sort_order: number; is_active: boolean }>): Promise<Niche> {
+        return fetchWithError<Niche>(`${API_BASE}/admin/niches/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify(data),
+        });
+    },
+
+    async deleteNiche(id: string): Promise<void> {
+        await fetchWithError(`${API_BASE}/admin/niches/${id}`, { method: 'DELETE' });
+    },
+};
+
 export interface UploadResult {
     success: boolean;
     url: string;

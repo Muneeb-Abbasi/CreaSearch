@@ -12,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { adminApi, profileApi, featuredProfileApi, collaborationApi, Profile, type AdminActionLog, type Collaboration } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileDetailModal } from "@/components/ProfileDetailModal";
+import { AdminCategoriesTab } from "@/components/AdminCategoriesTab";
 
 // Helper to get verification status badge
 function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Record<string, any>) {
@@ -486,6 +487,7 @@ export default function AdminDashboardPage() {
                 <TabsTrigger value="users">All Profiles</TabsTrigger>
                 <TabsTrigger value="collaborations" onClick={() => pendingCollabs.length === 0 && fetchPendingCollabs()}>Collaborations</TabsTrigger>
                 <TabsTrigger value="action-log" onClick={() => actionLogs.length === 0 && fetchActionLogs()}>Action Log</TabsTrigger>
+                <TabsTrigger value="categories">Categories</TabsTrigger>
               </TabsList>
 
               <TabsContent value="verifications" className="mt-6">
@@ -812,6 +814,10 @@ export default function AdminDashboardPage() {
                     <p className="text-muted-foreground">Analytics and reports will be displayed here.</p>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="categories" className="mt-6">
+                <AdminCategoriesTab />
               </TabsContent>
             </Tabs>
           </div>

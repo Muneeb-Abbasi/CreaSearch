@@ -590,7 +590,131 @@ export const categoryService = {
 
         if (error) throw error;
         return data || [];
-    }
+    },
+
+    // ── Admin Methods ──────────────────────────────────
+
+    async getAllIncludingInactive(): Promise<Category[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('categories')
+            .select('*')
+            .order('sort_order', { ascending: true });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createCategory(category: { name: string; slug: string; sort_order?: number }): Promise<Category> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('categories')
+            .insert({
+                name: category.name,
+                slug: category.slug,
+                sort_order: category.sort_order || 0,
+                is_active: true,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateCategory(id: string, updates: Partial<{ name: string; slug: string; sort_order: number; is_active: boolean }>): Promise<Category> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('categories')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteCategory(id: string): Promise<void> {
+        // Soft delete — set is_active to false
+        const supabase = getSupabaseClient();
+        const { error } = await supabase
+            .from('categories')
+            .update({ is_active: false })
+            .eq('id', id);
+
+        if (error) throw error;
+    },
+
+    async getNicheById(id: string): Promise<Niche | null> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('niches')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error && error.code !== 'PGRST116') throw error;
+        return data;
+    },
+
+    async getAllNichesIncludingInactive(categoryId?: string): Promise<Niche[]> {
+        const supabase = getSupabaseClient();
+        let query = supabase
+            .from('niches')
+            .select('*')
+            .order('sort_order', { ascending: true });
+
+        if (categoryId) {
+            query = query.eq('category_id', categoryId);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+    },
+
+    async createNiche(niche: { category_id: string; name: string; slug: string; sort_order?: number }): Promise<Niche> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('niches')
+            .insert({
+                category_id: niche.category_id,
+                name: niche.name,
+                slug: niche.slug,
+                sort_order: niche.sort_order || 0,
+                is_active: true,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async updateNiche(id: string, updates: Partial<{ category_id: string; name: string; slug: string; sort_order: number; is_active: boolean }>): Promise<Niche> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('niches')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async deleteNiche(id: string): Promise<void> {
+        // Soft delete — set is_active to false
+        const supabase = getSupabaseClient();
+        const { error } = await supabase
+            .from('niches')
+            .update({ is_active: false })
+            .eq('id', id);
+
+        if (error) throw error;
+    },
 };
 
 // ============= SOCIAL ACCOUNT SERVICE =============

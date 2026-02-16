@@ -814,6 +814,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // ADMIN CATEGORY & NICHE MANAGEMENT ROUTES
+  // ============================================
+
+  // GET /api/admin/categories - Get all categories (including inactive)
+  app.get("/api/admin/categories", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const categories = await categoryService.getAllIncludingInactive();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching admin categories:", error);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  // POST /api/admin/categories - Create a new category
+  app.post("/api/admin/categories", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { name, slug, sort_order } = req.body;
+      if (!name || !slug) {
+        return res.status(400).json({ error: "name and slug are required" });
+      }
+
+      const category = await categoryService.createCategory({ name, slug, sort_order });
+
+      await adminActionLogService.create({
+        admin_user_id: (req as any).user.id,
+        action: 'create_category',
+        target_type: 'category',
+        target_id: category.id,
+        details: { name, slug }
+      });
+
+      res.status(201).json(category);
+    } catch (error) {
+      console.error("Error creating category:", error);
+      res.status(500).json({ error: "Failed to create category" });
+    }
+  });
+
+  // PUT /api/admin/categories/:id - Update a category
+  app.put("/api/admin/categories/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { name, slug, sort_order, is_active } = req.body;
+      const category = await categoryService.updateCategory(req.params.id, { name, slug, sort_order, is_active });
+
+      await adminActionLogService.create({
+        admin_user_id: (req as any).user.id,
+        action: 'update_category',
+        target_type: 'category',
+        target_id: req.params.id,
+        details: { name, slug, sort_order, is_active }
+      });
+
+      res.json(category);
+    } catch (error) {
+      console.error("Error updating category:", error);
+      res.status(500).json({ error: "Failed to update category" });
+    }
+  });
+
+  // DELETE /api/admin/categories/:id - Soft-delete a category
+  app.delete("/api/admin/categories/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      await categoryService.deleteCategory(req.params.id);
+
+      await adminActionLogService.create({
+        admin_user_id: (req as any).user.id,
+        action: 'delete_category',
+        target_type: 'category',
+        target_id: req.params.id,
+        details: {}
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      res.status(500).json({ error: "Failed to delete category" });
+    }
+  });
+
+  // GET /api/admin/niches - Get all niches (including inactive), optional category_id filter
+  app.get("/api/admin/niches", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const categoryId = req.query.category_id as string | undefined;
+      const niches = await categoryService.getAllNichesIncludingInactive(categoryId);
+      res.json(niches);
+    } catch (error) {
+      console.error("Error fetching admin niches:", error);
+      res.status(500).json({ error: "Failed to fetch niches" });
+    }
+  });
+
+  // POST /api/admin/niches - Create a new niche
+  app.post("/api/admin/niches", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { category_id, name, slug, sort_order } = req.body;
+      if (!category_id || !name || !slug) {
+        return res.status(400).json({ error: "category_id, name, and slug are required" });
+      }
+
+      const niche = await categoryService.createNiche({ category_id, name, slug, sort_order });
+
+      await adminActionLogService.create({
+        admin_user_id: (req as any).user.id,
+        action: 'create_niche',
+        target_type: 'niche',
+        target_id: niche.id,
+        details: { category_id, name, slug }
+      });
+
+      res.status(201).json(niche);
+    } catch (error) {
+      console.error("Error creating niche:", error);
+      res.status(500).json({ error: "Failed to create niche" });
+    }
+  });
+
+  // PUT /api/admin/niches/:id - Update a niche
+  app.put("/api/admin/niches/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { category_id, name, slug, sort_order, is_active } = req.body;
+      const niche = await categoryService.updateNiche(req.params.id, { category_id, name, slug, sort_order, is_active });
+
+      await adminActionLogService.create({
+        admin_user_id: (req as any).user.id,
+        action: 'update_niche',
+        target_type: 'niche',
+        target_id: req.params.id,
+        details: { category_id, name, slug, sort_order, is_active }
+      });
+
+      res.json(niche);
+    } catch (error) {
+      console.error("Error updating niche:", error);
+      res.status(500).json({ error: "Failed to update niche" });
+    }
+  });
+
+  // DELETE /api/admin/niches/:id - Soft-delete a niche
+  app.delete("/api/admin/niches/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      await categoryService.deleteNiche(req.params.id);
+
+      await adminActionLogService.create({
+        admin_user_id: (req as any).user.id,
+        action: 'delete_niche',
+        target_type: 'niche',
+        target_id: req.params.id,
+        details: {}
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting niche:", error);
+      res.status(500).json({ error: "Failed to delete niche" });
+    }
+  });
+
   // ============= COLLABORATION ROUTES =============
 
   // POST /api/collaborations - Submit a collaboration request
