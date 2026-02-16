@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { getSupabaseClient } from './database';
+import { logger } from '../utils/logger';
 
 const resendApiKey = process.env.RESEND_API_KEY || '';
 
@@ -23,13 +24,13 @@ async function getUserEmail(userId: string): Promise<string | null> {
             .auth.admin.getUserById(userId);
 
         if (error) {
-            console.error('[Email] Error fetching user email:', error);
+            logger.error('[Email] Error fetching user email:', error);
             return null;
         }
 
         return data?.user?.email || null;
     } catch (error) {
-        console.error('[Email] Failed to get user email:', error);
+        logger.error('[Email] Failed to get user email:', error);
         return null;
     }
 }
@@ -72,14 +73,14 @@ async function sendEmail(to: string, subject: string, html: string): Promise<boo
         });
 
         if (error) {
-            console.error('[Email] Resend API error:', error);
+            logger.error('[Email] Resend API error:', error);
             return false;
         }
 
-        console.log('[Email] Sent successfully:', data?.id, 'to:', to);
+        logger.info('[Email] Sent successfully:', { id: data?.id, to });
         return true;
     } catch (error) {
-        console.error('[Email] Error sending email:', error);
+        logger.error('[Email] Error sending email:', error);
         return false;
     }
 }
@@ -90,7 +91,7 @@ export const emailService = {
     async sendProfileApprovedEmail(userId: string, name: string): Promise<boolean> {
         const email = await getUserEmail(userId);
         if (!email) {
-            console.log('[Email] No email found for user:', userId);
+            logger.info('[Email] No email found for user:', userId);
             return false;
         }
 
@@ -125,7 +126,7 @@ export const emailService = {
     async sendProfileRejectedEmail(userId: string, name: string, reason?: string): Promise<boolean> {
         const email = await getUserEmail(userId);
         if (!email) {
-            console.log('[Email] No email found for user:', userId);
+            logger.info('[Email] No email found for user:', userId);
             return false;
         }
 
@@ -188,7 +189,7 @@ export const emailService = {
     ): Promise<boolean> {
         const email = await getUserEmail(userId);
         if (!email) {
-            console.log('[Email] No email found for user:', userId);
+            logger.info('[Email] No email found for user:', userId);
             return false;
         }
 
@@ -230,7 +231,7 @@ export const emailService = {
     ): Promise<boolean> {
         const email = await getUserEmail(userId);
         if (!email) {
-            console.log('[Email] No email found for user:', userId);
+            logger.info('[Email] No email found for user:', userId);
             return false;
         }
 
@@ -277,7 +278,7 @@ export const emailService = {
     ): Promise<boolean> {
         const email = await getUserEmail(userId);
         if (!email) {
-            console.log('[Email] No email found for user:', userId);
+            logger.info('[Email] No email found for user:', userId);
             return false;
         }
 

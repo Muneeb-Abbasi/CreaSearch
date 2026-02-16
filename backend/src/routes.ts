@@ -5,6 +5,8 @@ import { profileService, reviewService, scoringService, categoryService, socialA
 import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
 import { requireAuth, requireAdmin } from "./middleware/auth";
+import { logger } from "./utils/logger";
+import { sensitiveRateLimit } from "./middleware/rateLimit";
 
 
 // Configure multer for file uploads
@@ -32,7 +34,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categories = await categoryService.getAll();
       res.json(categories);
     } catch (error) {
-      console.error("Error fetching categories:", error);
+      logger.error("Error fetching categories:", error);
       res.status(500).json({ error: "Failed to fetch categories" });
     }
   });
@@ -43,7 +45,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const niches = await categoryService.getNichesByCategory(req.params.id);
       res.json(niches);
     } catch (error) {
-      console.error("Error fetching niches:", error);
+      logger.error("Error fetching niches:", error);
       res.status(500).json({ error: "Failed to fetch niches" });
     }
   });
@@ -57,7 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         : await categoryService.getAllNiches();
       res.json(niches);
     } catch (error) {
-      console.error("Error fetching niches:", error);
+      logger.error("Error fetching niches:", error);
       res.status(500).json({ error: "Failed to fetch niches" });
     }
   });
@@ -70,7 +72,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const accounts = await socialAccountService.getByProfileId(req.params.id);
       res.json(accounts);
     } catch (error) {
-      console.error("Error fetching social accounts:", error);
+      logger.error("Error fetching social accounts:", error);
       res.status(500).json({ error: "Failed to fetch social accounts" });
     }
   });
@@ -92,7 +94,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json({ ...profile, exists: true });
     } catch (error) {
-      console.error("Error fetching user profile:", error);
+      logger.error("Error fetching user profile:", error);
       res.status(500).json({ error: "Failed to fetch profile" });
     }
   });
@@ -103,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profiles = await profileService.getAllByUserId(req.params.userId);
       res.json(profiles);
     } catch (error) {
-      console.error("Error fetching user profiles:", error);
+      logger.error("Error fetching user profiles:", error);
       res.status(500).json({ error: "Failed to fetch profiles" });
     }
   });
@@ -126,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profiles = await profileService.getAll(filters);
       res.json(profiles);
     } catch (error) {
-      console.error("Error fetching profiles:", error);
+      logger.error("Error fetching profiles:", error);
       res.status(500).json({ error: "Failed to fetch profiles" });
     }
   });
@@ -140,7 +142,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.json(profile);
     } catch (error) {
-      console.error("Error fetching profile:", error);
+      logger.error("Error fetching profile:", error);
       res.status(500).json({ error: "Failed to fetch profile" });
     }
   });
@@ -165,9 +167,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(profile);
     } catch (error) {
-      console.error("Error creating profile:", error);
+      logger.error("Error creating profile:", error);
       // @ts-ignore
-      if (error && error.message) console.error("Error message:", error.message);
+      if (error && error.message) logger.error("Error message:", error.message);
       res.status(500).json({ error: "Failed to create profile" });
     }
   });
@@ -202,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(profile);
     } catch (error) {
-      console.error("Error updating profile:", error);
+      logger.error("Error updating profile:", error);
       res.status(500).json({ error: "Failed to update profile" });
     }
   });
@@ -223,7 +225,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await profileService.delete(profileId);
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting profile:", error);
+      logger.error("Error deleting profile:", error);
       res.status(500).json({ error: "Failed to delete profile" });
     }
   });
@@ -237,7 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const profiles = await profileService.getPending();
       res.json(profiles);
     } catch (error) {
-      console.error("Error fetching pending profiles:", error);
+      logger.error("Error fetching pending profiles:", error);
       res.status(500).json({ error: "Failed to fetch pending profiles" });
     }
   });
@@ -273,10 +275,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       emailService.sendProfileApprovedEmail(profile.user_id, profile.name)
-        .catch(err => console.error('[Email] Failed to send approval email:', err));
+        .catch(err => logger.error('[Email] Failed to send approval email:', err));
       res.json(profile);
     } catch (error) {
-      console.error("Error approving profile:", error);
+      logger.error("Error approving profile:", error);
       res.status(500).json({ error: "Failed to approve profile" });
     }
   });
@@ -310,10 +312,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       emailService.sendProfileRejectedEmail(profile.user_id, profile.name, reason)
-        .catch(err => console.error('[Email] Failed to send rejection email:', err));
+        .catch(err => logger.error('[Email] Failed to send rejection email:', err));
       res.json(profile);
     } catch (error) {
-      console.error("Error rejecting profile:", error);
+      logger.error("Error rejecting profile:", error);
       res.status(500).json({ error: "Failed to reject profile" });
     }
   });
@@ -326,7 +328,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await profileService.delete(profileId);
       res.json({ success: true, message: "Profile deleted" });
     } catch (error) {
-      console.error("Error deleting profile:", error);
+      logger.error("Error deleting profile:", error);
       res.status(500).json({ error: "Failed to delete profile" });
     }
   });
@@ -339,13 +341,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const reviews = await reviewService.getByProfileId(req.params.profileId);
       res.json(reviews);
     } catch (error) {
-      console.error("Error fetching reviews:", error);
+      logger.error("Error fetching reviews:", error);
       res.status(500).json({ error: "Failed to fetch reviews" });
     }
   });
 
   // POST /api/reviews - Create a new review (requires auth + approved profile)
-  app.post("/api/reviews", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/reviews", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
     try {
       const { profile_id, rating, comment } = req.body;
       const userId = req.user.id;
@@ -367,7 +369,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(review);
     } catch (error: any) {
-      console.error("Error creating review:", error);
+      logger.error("Error creating review:", error);
       // Return user-friendly error messages
       if (error.message.includes('Only verified users')) {
         return res.status(403).json({ error: error.message });
@@ -408,7 +410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, url: result.url, path: result.path });
     } catch (error) {
-      console.error("Error uploading photo:", error);
+      logger.error("Error uploading photo:", error);
       res.status(500).json({ error: "Failed to upload photo" });
     }
   });
@@ -430,13 +432,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true, url: result.url, path: result.path });
     } catch (error) {
-      console.error("Error uploading video:", error);
+      logger.error("Error uploading video:", error);
       res.status(500).json({ error: "Failed to upload video" });
     }
   });
 
   // POST /api/verify/youtube - Verify YouTube channel and get subscriber count
-  app.post("/api/verify/youtube", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/verify/youtube", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
     try {
       const { channelUrl, profileId } = req.body;
 
@@ -473,7 +475,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...result
       });
     } catch (error) {
-      console.error("Error verifying YouTube channel:", error);
+      logger.error("Error verifying YouTube channel:", error);
       res.status(500).json({ error: "Failed to verify YouTube channel" });
     }
   });
@@ -504,13 +506,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(verifications);
     } catch (error) {
-      console.error("Error fetching verification status:", error);
+      logger.error("Error fetching verification status:", error);
       res.status(500).json({ error: "Failed to fetch verification status" });
     }
   });
 
   // POST /api/verify/instagram - Queue Instagram verification (background processing)
-  app.post("/api/verify/instagram", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/verify/instagram", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
     try {
       const { profileUrl, profileId, immediate } = req.body;
 
@@ -582,7 +584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'PENDING'
       });
     } catch (error) {
-      console.error("Error processing Instagram verification:", error);
+      logger.error("Error processing Instagram verification:", error);
       res.status(500).json({ error: "Failed to process Instagram verification" });
     }
   });
@@ -628,7 +630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...result
       });
     } catch (error) {
-      console.error("Error verifying Instagram:", error);
+      logger.error("Error verifying Instagram:", error);
       res.status(500).json({ error: "Failed to verify Instagram" });
     }
   });
@@ -644,7 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...result
       });
     } catch (error) {
-      console.error("Error triggering YouTube refresh:", error);
+      logger.error("Error triggering YouTube refresh:", error);
       res.status(500).json({ error: "Failed to trigger YouTube refresh" });
     }
   });
@@ -656,7 +658,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const status = getCronStatus();
       res.json(status);
     } catch (error) {
-      console.error("Error getting cron status:", error);
+      logger.error("Error getting cron status:", error);
       res.status(500).json({ error: "Failed to get cron status" });
     }
   });
@@ -674,7 +676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notifications = await notificationService.getByUserId(userId, limit, offset);
       res.json(notifications);
     } catch (error) {
-      console.error("Error fetching notifications:", error);
+      logger.error("Error fetching notifications:", error);
       res.status(500).json({ error: "Failed to fetch notifications" });
     }
   });
@@ -686,7 +688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const count = await notificationService.getUnreadCount(userId);
       res.json({ count });
     } catch (error) {
-      console.error("Error fetching unread count:", error);
+      logger.error("Error fetching unread count:", error);
       res.status(500).json({ error: "Failed to fetch unread count" });
     }
   });
@@ -698,7 +700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await notificationService.markAsRead(req.params.id, userId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error marking notification as read:", error);
+      logger.error("Error marking notification as read:", error);
       res.status(500).json({ error: "Failed to mark notification as read" });
     }
   });
@@ -710,7 +712,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await notificationService.markAllAsRead(userId);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error marking all notifications as read:", error);
+      logger.error("Error marking all notifications as read:", error);
       res.status(500).json({ error: "Failed to mark all as read" });
     }
   });
@@ -727,7 +729,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logs = await adminActionLogService.getAll(limit, offset);
       res.json(logs);
     } catch (error) {
-      console.error("Error fetching admin action log:", error);
+      logger.error("Error fetching admin action log:", error);
       res.status(500).json({ error: "Failed to fetch action log" });
     }
   });
@@ -742,7 +744,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const featured = await featuredProfileService.getAll();
       res.json(featured);
     } catch (error) {
-      console.error("Error fetching featured profiles:", error);
+      logger.error("Error fetching featured profiles:", error);
       res.status(500).json({ error: "Failed to fetch featured profiles" });
     }
   });
@@ -787,7 +789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(featured);
     } catch (error) {
-      console.error("Error featuring profile:", error);
+      logger.error("Error featuring profile:", error);
       res.status(500).json({ error: "Failed to feature profile" });
     }
   });
@@ -809,7 +811,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error unfeaturing profile:", error);
+      logger.error("Error unfeaturing profile:", error);
       res.status(500).json({ error: "Failed to unfeature profile" });
     }
   });
@@ -824,7 +826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const categories = await categoryService.getAllIncludingInactive();
       res.json(categories);
     } catch (error) {
-      console.error("Error fetching admin categories:", error);
+      logger.error("Error fetching admin categories:", error);
       res.status(500).json({ error: "Failed to fetch categories" });
     }
   });
@@ -849,7 +851,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(category);
     } catch (error) {
-      console.error("Error creating category:", error);
+      logger.error("Error creating category:", error);
       res.status(500).json({ error: "Failed to create category" });
     }
   });
@@ -870,7 +872,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(category);
     } catch (error) {
-      console.error("Error updating category:", error);
+      logger.error("Error updating category:", error);
       res.status(500).json({ error: "Failed to update category" });
     }
   });
@@ -890,7 +892,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting category:", error);
+      logger.error("Error deleting category:", error);
       res.status(500).json({ error: "Failed to delete category" });
     }
   });
@@ -902,7 +904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const niches = await categoryService.getAllNichesIncludingInactive(categoryId);
       res.json(niches);
     } catch (error) {
-      console.error("Error fetching admin niches:", error);
+      logger.error("Error fetching admin niches:", error);
       res.status(500).json({ error: "Failed to fetch niches" });
     }
   });
@@ -927,7 +929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(niche);
     } catch (error) {
-      console.error("Error creating niche:", error);
+      logger.error("Error creating niche:", error);
       res.status(500).json({ error: "Failed to create niche" });
     }
   });
@@ -948,7 +950,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(niche);
     } catch (error) {
-      console.error("Error updating niche:", error);
+      logger.error("Error updating niche:", error);
       res.status(500).json({ error: "Failed to update niche" });
     }
   });
@@ -968,7 +970,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ success: true });
     } catch (error) {
-      console.error("Error deleting niche:", error);
+      logger.error("Error deleting niche:", error);
       res.status(500).json({ error: "Failed to delete niche" });
     }
   });
@@ -976,7 +978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============= COLLABORATION ROUTES =============
 
   // POST /api/collaborations - Submit a collaboration request
-  app.post("/api/collaborations", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/collaborations", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
     try {
       const { requester_profile_id, partner_profile_id, description, proof_url } = req.body;
 
@@ -1005,7 +1007,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json(collab);
     } catch (error) {
-      console.error("Error creating collaboration:", error);
+      logger.error("Error creating collaboration:", error);
       res.status(500).json({ error: "Failed to create collaboration request" });
     }
   });
@@ -1016,7 +1018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const collabs = await collaborationService.getByProfileId(req.params.id);
       res.json(collabs);
     } catch (error) {
-      console.error("Error fetching collaborations:", error);
+      logger.error("Error fetching collaborations:", error);
       res.status(500).json({ error: "Failed to fetch collaborations" });
     }
   });
@@ -1027,7 +1029,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const collabs = await collaborationService.getPending();
       res.json(collabs);
     } catch (error) {
-      console.error("Error fetching pending collaborations:", error);
+      logger.error("Error fetching pending collaborations:", error);
       res.status(500).json({ error: "Failed to fetch pending collaborations" });
     }
   });
@@ -1062,16 +1064,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (requesterProfile && partnerProfile) {
         emailService.sendCollaborationApprovedEmail(
           requesterProfile.user_id, requesterProfile.name, partnerProfile.name, collab.description
-        ).catch(err => console.error('[Email] Failed to send collab approve email (requester):', err));
+        ).catch(err => logger.error('[Email] Failed to send collab approve email (requester):', err));
 
         emailService.sendCollaborationApprovedEmail(
           partnerProfile.user_id, partnerProfile.name, requesterProfile.name, collab.description
-        ).catch(err => console.error('[Email] Failed to send collab approve email (partner):', err));
+        ).catch(err => logger.error('[Email] Failed to send collab approve email (partner):', err));
       }
 
       res.json(collab);
     } catch (error) {
-      console.error("Error approving collaboration:", error);
+      logger.error("Error approving collaboration:", error);
       res.status(500).json({ error: "Failed to approve collaboration" });
     }
   });
@@ -1100,12 +1102,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (requesterProfile && partnerProfile) {
         emailService.sendCollaborationRejectedEmail(
           requesterProfile.user_id, requesterProfile.name, partnerProfile.name, collab.description, admin_notes
-        ).catch(err => console.error('[Email] Failed to send collab rejection email:', err));
+        ).catch(err => logger.error('[Email] Failed to send collab rejection email:', err));
       }
 
       res.json(collab);
     } catch (error) {
-      console.error("Error rejecting collaboration:", error);
+      logger.error("Error rejecting collaboration:", error);
       res.status(500).json({ error: "Failed to reject collaboration" });
     }
   });

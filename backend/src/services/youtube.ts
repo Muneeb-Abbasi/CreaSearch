@@ -9,6 +9,7 @@
  */
 
 import { google } from 'googleapis';
+import { logger } from '../utils/logger';
 
 const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
@@ -84,7 +85,7 @@ async function getChannelId(channelUrl: string): Promise<string | null> {
 
         return items[0].snippet?.channelId || null;
     } catch (error) {
-        console.error('[YouTube] Error searching for channel:', error);
+        logger.error('[YouTube] Error searching for channel:', error);
         return null;
     }
 }
@@ -97,7 +98,7 @@ async function getChannelId(channelUrl: string): Promise<string | null> {
  */
 export async function verifyYouTubeChannel(channelUrl: string): Promise<YouTubeVerificationResult> {
     if (!YOUTUBE_API_KEY) {
-        console.error('[YouTube] API key not configured');
+        logger.error('[YouTube] API key not configured');
         return {
             channelId: null,
             channelTitle: null,
@@ -108,9 +109,9 @@ export async function verifyYouTubeChannel(channelUrl: string): Promise<YouTubeV
     }
 
     try {
-        console.log(`[YouTube] Verifying channel URL: ${channelUrl}`);
+        logger.info(`[YouTube] Verifying channel URL: ${channelUrl}`);
         const channelId = await getChannelId(channelUrl);
-        console.log(`[YouTube] Resolved channel ID: ${channelId}`);
+        logger.info(`[YouTube] Resolved channel ID: ${channelId}`);
 
         if (!channelId) {
             return {
@@ -165,7 +166,7 @@ export async function verifyYouTubeChannel(channelUrl: string): Promise<YouTubeV
             status: 'VERIFIED'
         };
     } catch (error: any) {
-        console.error('[YouTube] Verification error:', error.message);
+        logger.error('[YouTube] Verification error:', error.message);
         return {
             channelId: null,
             channelTitle: null,

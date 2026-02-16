@@ -4,7 +4,7 @@ import cors from 'cors';
 import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { apiRateLimit } from "./middleware/rateLimit";
-import { secureLogger } from "./utils/secureLogger";
+import { logger } from "./utils/logger";
 
 const app = express();
 
@@ -21,7 +21,7 @@ app.use(cors({
     if (allowedOrigins.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
       callback(null, true);
     } else {
-      secureLogger.warn('CORS blocked request', { origin });
+      logger.warn('CORS blocked request', { origin });
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -52,7 +52,7 @@ app.use((req, res, next) => {
   const start = Date.now();
   res.on("finish", () => {
     const duration = Date.now() - start;
-    secureLogger.info(`${req.method} ${req.path} ${res.statusCode} in ${duration}ms`);
+    logger.info(`${req.method} ${req.path} ${res.statusCode} in ${duration}ms`);
   });
   next();
 });
@@ -64,7 +64,7 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-    secureLogger.error('Request error', { status, message, stack: err.stack });
+    logger.error('Request error', { status, message, stack: err.stack });
     res.status(status).json({ message });
   });
 
@@ -78,14 +78,14 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
   }, async () => {
-    secureLogger.info(`Backend server running on port ${port}`);
+    logger.info(`Backend server running on port ${port}`);
 
     // Initialize cron jobs for background verification updates
     try {
       const { initializeCronJobs } = await import('./services/cron');
       initializeCronJobs();
     } catch (error) {
-      secureLogger.error('Failed to initialize cron jobs', { error });
+      logger.error('Failed to initialize cron jobs', { error });
     }
   });
 })();

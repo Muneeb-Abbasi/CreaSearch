@@ -10,6 +10,7 @@
 
 import cron from 'node-cron';
 import { socialAccountService, SocialAccount } from './database';
+import { logger } from '../utils/logger';
 
 // Track if cron is already initialized
 let cronInitialized = false;
@@ -41,12 +42,12 @@ async function refreshYouTubeForAccount(account: SocialAccount): Promise<boolean
                     lastUpdated: new Date().toISOString()
                 }
             });
-            console.log(`[Cron] Updated YouTube for profile ${account.profile_id}: ${result.subscribers} subscribers`);
+            logger.info(`[Cron] Updated YouTube for profile ${account.profile_id}: ${result.subscribers} subscribers`);
             return true;
         }
         return false;
     } catch (error) {
-        console.error(`[Cron] Failed to refresh YouTube for profile ${account.profile_id}:`, error);
+        logger.error(`[Cron] Failed to refresh YouTube for profile ${account.profile_id}:`, error);
         return false;
     }
 }
@@ -55,7 +56,7 @@ async function refreshYouTubeForAccount(account: SocialAccount): Promise<boolean
  * Refresh YouTube counts for all profiles with YouTube accounts
  */
 async function refreshAllYouTubeProfiles(): Promise<{ updated: number; failed: number; total: number }> {
-    console.log('[Cron] Starting weekly YouTube refresh...');
+    logger.info('[Cron] Starting weekly YouTube refresh...');
 
     const stats = { updated: 0, failed: 0, total: 0 };
 
@@ -86,9 +87,9 @@ async function refreshAllYouTubeProfiles(): Promise<{ updated: number; failed: n
             }
         }
 
-        console.log(`[Cron] YouTube refresh complete: ${stats.updated}/${stats.total} updated, ${stats.failed} failed`);
+        logger.info(`[Cron] YouTube refresh complete: ${stats.updated}/${stats.total} updated, ${stats.failed} failed`);
     } catch (error) {
-        console.error('[Cron] YouTube refresh job failed:', error);
+        logger.error('[Cron] YouTube refresh job failed:', error);
     }
 
     return stats;
@@ -99,20 +100,20 @@ async function refreshAllYouTubeProfiles(): Promise<{ updated: number; failed: n
  */
 export function initializeCronJobs(): void {
     if (cronInitialized) {
-        console.log('[Cron] Already initialized, skipping...');
+        logger.info('[Cron] Already initialized, skipping...');
         return;
     }
 
     // Weekly YouTube refresh - Every Sunday at 3:00 AM
     cron.schedule('0 3 * * 0', async () => {
-        console.log('[Cron] Running scheduled YouTube refresh...');
+        logger.info('[Cron] Running scheduled YouTube refresh...');
         await refreshAllYouTubeProfiles();
     }, {
         timezone: 'Asia/Karachi' // Pakistan time
     });
 
-    console.log('[Cron] Scheduled jobs initialized:');
-    console.log('  - YouTube refresh: Weekly (Sunday 3:00 AM PKT)');
+    logger.info('[Cron] Scheduled jobs initialized:');
+    logger.info('  - YouTube refresh: Weekly (Sunday 3:00 AM PKT)');
 
     cronInitialized = true;
 }

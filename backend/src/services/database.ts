@@ -1,4 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { logger } from '../utils/logger';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -244,7 +245,7 @@ export const profileService = {
 
     async delete(id: string): Promise<void> {
         const supabase = getSupabaseClient();
-        console.log(`[DB] Deleting profile with id: ${id}`);
+        logger.info(`[DB] Deleting profile with id: ${id}`);
 
         const { data, error, count } = await supabase
             .from('profiles')
@@ -252,12 +253,12 @@ export const profileService = {
             .eq('id', id)
             .select();
 
-        console.log(`[DB] Delete result - data:`, data, `error:`, error);
+        logger.info(`[DB] Delete result - data:`, data, `error:`, error);
 
         if (error) throw error;
 
         if (!data || data.length === 0) {
-            console.log(`[DB] Warning: No rows were deleted for id: ${id}`);
+            logger.warn(`[DB] Warning: No rows were deleted for id: ${id}`);
         }
     },
 
@@ -492,7 +493,7 @@ export const scoringService = {
             .single();
 
         if (profileError || !profile) {
-            console.error('Error fetching profile for scoring:', profileError);
+            logger.error('Error fetching profile for scoring:', profileError);
             return 0;
         }
 
@@ -515,7 +516,7 @@ export const scoringService = {
             .eq('id', profileId);
 
         if (updateError) {
-            console.error('Error updating creasearch score:', updateError);
+            logger.error('Error updating creasearch score:', updateError);
         }
 
         return newScore;
@@ -530,14 +531,14 @@ export const scoringService = {
             .eq('status', 'approved');
 
         if (error || !profiles) {
-            console.error('Error fetching profiles for recalculation:', error);
+            logger.error('Error fetching profiles for recalculation:', error);
             return;
         }
 
         for (const profile of profiles) {
             await this.updateProfileScore(profile.id);
         }
-        console.log(`[Scoring] Recalculated scores for ${profiles.length} profiles`);
+        logger.info(`[Scoring] Recalculated scores for ${profiles.length} profiles`);
     }
 };
 

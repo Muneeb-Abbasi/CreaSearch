@@ -13,6 +13,7 @@
 
 const APIFY_TOKEN = process.env.APIFY_TOKEN;
 const REQUEST_TIMEOUT = 120000; // 120 seconds
+import { logger } from '../utils/logger';
 
 export type InstagramStatus = 'VALIDATED' | 'PRIVATE' | 'NOT_FOUND' | 'FAILED' | 'PENDING';
 
@@ -60,7 +61,7 @@ async function runApifyActor(actorId: string, payload: Record<string, any>): Pro
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-            console.error(`[Instagram] Apify error: ${response.status} ${response.statusText}`);
+            logger.error(`[Instagram] Apify error: ${response.status} ${response.statusText}`);
             return [];
         }
 
@@ -68,9 +69,9 @@ async function runApifyActor(actorId: string, payload: Record<string, any>): Pro
     } catch (error: any) {
         clearTimeout(timeoutId);
         if (error.name === 'AbortError') {
-            console.error('[Instagram] Apify request timed out');
+            logger.error('[Instagram] Apify request timed out');
         } else {
-            console.error('[Instagram] Apify error:', error.message);
+            logger.error('[Instagram] Apify error:', error.message);
         }
         return [];
     }
@@ -86,7 +87,7 @@ async function runApifyActor(actorId: string, payload: Record<string, any>): Pro
  */
 export async function verifyInstagramProfile(profileUrl: string): Promise<InstagramVerificationResult> {
     if (!APIFY_TOKEN) {
-        console.error('[Instagram] Apify token not configured');
+        logger.error('[Instagram] Apify token not configured');
         return {
             username: null,
             followers: null,
