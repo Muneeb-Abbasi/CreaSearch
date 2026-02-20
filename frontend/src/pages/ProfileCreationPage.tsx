@@ -42,6 +42,7 @@ export default function ProfileCreationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [existingProfile, setExistingProfile] = useState<Profile | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -146,17 +147,7 @@ export default function ProfileCreationPage() {
     fetchNiches();
   }, [formData.category_id]);
 
-  // Re-fetch profile when page becomes visible (fixes stale cache after admin delete)
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && user?.id) {
-        checkExistingProfile();
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [user]);
+  // Removed visibilitychange handler that was causing form data loss on browser tab switch
 
   // Prefill name from Google profile
   useEffect(() => {
@@ -505,8 +496,8 @@ export default function ProfileCreationPage() {
     );
   }
 
-  // Profile exists - show appropriate status page
-  if (existingProfile) {
+  // Profile exists - show appropriate status page (skip if user is editing a rejected profile)
+  if (existingProfile && !isEditing) {
     return (
       <div className="min-h-screen flex flex-col">
         <Header />
@@ -563,6 +554,8 @@ export default function ProfileCreationPage() {
                     </p>
                     <Button onClick={() => {
                       // Pre-fill form with existing data for editing
+                      const ytLink = existingProfile.social_links?.youtube;
+                      const igLink = existingProfile.social_links?.instagram;
                       setFormData({
                         name: existingProfile.name,
                         title: existingProfile.title || "",
@@ -574,13 +567,13 @@ export default function ProfileCreationPage() {
                         bio: existingProfile.bio || "",
                         collaborationTypes: existingProfile.collaboration_types || [],
                         videoIntroUrl: existingProfile.video_intro_url || "",
-                        youtube: existingProfile.social_links?.youtube || "",
-                        instagram: existingProfile.social_links?.instagram || "",
+                        youtube: typeof ytLink === 'object' ? ytLink?.url || "" : ytLink || "",
+                        instagram: typeof igLink === 'object' ? igLink?.url || "" : igLink || "",
                         linkedin: existingProfile.social_links?.linkedin || "",
                         twitter: existingProfile.social_links?.twitter || "",
                         agreedToTerms: false,
                       });
-                      setExistingProfile(null); // Clear to show form
+                      setIsEditing(true); // Show form while keeping existingProfile reference for update
                     }}>
                       Edit Profile
                     </Button>

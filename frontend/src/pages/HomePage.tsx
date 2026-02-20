@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { HowItWorksSection } from "@/components/HowItWorksSection";
 import { FeaturedCreatorsSection } from "@/components/FeaturedCreatorsSection";
+import { FeaturedBrandsSection } from "@/components/FeaturedBrandsSection";
 import { ForOrganizationsSection } from "@/components/ForOrganizationsSection";
 import { ForCreatorsSection } from "@/components/ForCreatorsSection";
 import { TrustSection } from "@/components/TrustSection";
@@ -34,6 +35,7 @@ export default function HomePage() {
         <HeroSection />
         <HowItWorksSection />
         <FeaturedCreatorsSection />
+        <FeaturedBrandsSection />
         <ForOrganizationsSection />
         <ForCreatorsSection />
         <TrustSection />

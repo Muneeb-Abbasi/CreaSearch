@@ -45,6 +45,7 @@ export default function BrandProfileCreationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [existingProfile, setExistingProfile] = useState<Profile | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -469,8 +470,8 @@ export default function BrandProfileCreationPage() {
     );
   }
 
-  // Profile exists - show appropriate status page
-  if (existingProfile) {
+  // Profile exists - show appropriate status page (skip if user is editing a rejected profile)
+  if (existingProfile && !isEditing) {
     return (
       <div className="min-h-screen flex flex-col">
         <Header />
@@ -542,7 +543,7 @@ export default function BrandProfileCreationPage() {
                         instagram: existingProfile.social_links?.instagram || "",
                         agreedToTerms: false,
                       });
-                      setExistingProfile(null);
+                      setIsEditing(true); // Show form while keeping existingProfile reference for update
                     }}>
                       Edit Brand Profile
                     </Button>
