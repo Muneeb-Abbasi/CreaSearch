@@ -83,6 +83,17 @@ export default function AdminDashboardPage() {
   const [actionLogLoading, setActionLogLoading] = useState(false);
   const [pendingCollabs, setPendingCollabs] = useState<Collaboration[]>([]);
   const [collabLoading, setCollabLoading] = useState<string | null>(null);
+  const [showAdminCollabForm, setShowAdminCollabForm] = useState(false);
+  const [adminCollabForm, setAdminCollabForm] = useState({
+    requester_profile_id: '',
+    description: '',
+    proof_url: '',
+    is_external: true,
+    external_partner_name: '',
+    external_partner_url: '',
+    auto_approve: true,
+  });
+  const [adminCollabSubmitting, setAdminCollabSubmitting] = useState(false);
 
   // Hardcoded admin emails (can access admin dashboard)
   const ADMIN_EMAILS = [
@@ -223,6 +234,37 @@ export default function AdminDashboardPage() {
       toast({ title: "Error", description: error.message || "Failed to reject collaboration", variant: "destructive" });
     } finally {
       setCollabLoading(null);
+    }
+  };
+
+  const handleAdminCreateCollab = async () => {
+    if (!adminCollabForm.requester_profile_id || !adminCollabForm.description) {
+      toast({ title: "Error", description: "Profile and description are required", variant: "destructive" });
+      return;
+    }
+    if (adminCollabForm.is_external && !adminCollabForm.external_partner_name) {
+      toast({ title: "Error", description: "External partner name is required", variant: "destructive" });
+      return;
+    }
+    setAdminCollabSubmitting(true);
+    try {
+      await collaborationApi.adminCreate(adminCollabForm);
+      toast({
+        title: adminCollabForm.auto_approve ? "Collaboration Created & Approved" : "Collaboration Created",
+        description: adminCollabForm.auto_approve
+          ? "The collaboration has been created and auto-approved. Score updated."
+          : "The collaboration has been created and is pending."
+      });
+      setShowAdminCollabForm(false);
+      setAdminCollabForm({
+        requester_profile_id: '', description: '', proof_url: '',
+        is_external: true, external_partner_name: '', external_partner_url: '', auto_approve: true,
+      });
+      fetchPendingCollabs();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to create collaboration", variant: "destructive" });
+    } finally {
+      setAdminCollabSubmitting(false);
     }
   };
 
@@ -746,12 +788,95 @@ export default function AdminDashboardPage() {
                         <Handshake className="w-5 h-5" />
                         Pending Collaborations ({pendingCollabs.length})
                       </CardTitle>
-                      <Button variant="outline" size="sm" onClick={fetchPendingCollabs}>
-                        <RefreshCw className="w-4 h-4 mr-1" /> Refresh
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setShowAdminCollabForm(!showAdminCollabForm)}>
+                          {showAdminCollabForm ? 'Cancel' : '+ Add Collab'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={fetchPendingCollabs}>
+                          <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
+                    {/* Admin Collab Creation Form */}
+                    {showAdminCollabForm && (
+                      <div className="mb-6 p-4 border rounded-md bg-muted/50 space-y-4">
+                        <h4 className="font-semibold text-sm">Create Collaboration (Admin)</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-sm font-medium">User Profile *</label>
+                            <select
+                              className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                              value={adminCollabForm.requester_profile_id}
+                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, requester_profile_id: e.target.value }))}
+                            >
+                              <option value="">Select profile...</option>
+                              {allProfiles.map(p => (
+                                <option key={p.id} value={p.id}>{p.name} ({p.title || p.profile_type})</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">External Partner Name *</label>
+                            <input
+                              className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                              placeholder="e.g. Nike Pakistan, @creator_name"
+                              value={adminCollabForm.external_partner_name}
+                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, external_partner_name: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">External Partner URL</label>
+                            <input
+                              className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                              placeholder="https://instagram.com/partner or website link"
+                              value={adminCollabForm.external_partner_url}
+                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, external_partner_url: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Proof URL</label>
+                            <input
+                              className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                              placeholder="Link to screenshot or proof"
+                              value={adminCollabForm.proof_url}
+                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, proof_url: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium">Description *</label>
+                          <textarea
+                            className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                            rows={2}
+                            placeholder="Describe the collaboration..."
+                            value={adminCollabForm.description}
+                            onChange={(e) => setAdminCollabForm(prev => ({ ...prev, description: e.target.value }))}
+                          />
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={adminCollabForm.auto_approve}
+                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, auto_approve: e.target.checked }))}
+                            />
+                            Auto-approve (immediately count towards score)
+                          </label>
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={handleAdminCreateCollab}
+                          disabled={adminCollabSubmitting}
+                        >
+                          {adminCollabSubmitting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                          {adminCollabForm.auto_approve ? 'Create & Approve' : 'Create (Pending)'}
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Pending Collaborations List */}
                     {pendingCollabs.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Handshake className="w-12 h-12 mx-auto mb-4 opacity-40" />
@@ -766,11 +891,23 @@ export default function AdminDashboardPage() {
                                 <p className="text-sm font-medium">
                                   Requester: <span className="text-muted-foreground">{collab.requester_profile_id.slice(0, 8)}...</span>
                                   {" → "}
-                                  Partner: <span className="text-muted-foreground">{collab.partner_profile_id.slice(0, 8)}...</span>
+                                  {collab.is_external ? (
+                                    <span className="text-orange-600 font-semibold">
+                                      {collab.external_partner_name || 'External Partner'}
+                                      {collab.external_partner_url && (
+                                        <a href={collab.external_partner_url} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-500 underline text-xs">↗</a>
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <>Partner: <span className="text-muted-foreground">{collab.partner_profile_id?.slice(0, 8)}...</span></>
+                                  )}
                                 </p>
                                 <p className="text-xs text-muted-foreground">Submitted {formatDate(collab.created_at)}</p>
                               </div>
-                              <Badge variant="secondary">Pending</Badge>
+                              <div className="flex items-center gap-2">
+                                {collab.is_external && <Badge variant="outline" className="text-orange-600 border-orange-300">External</Badge>}
+                                <Badge variant="secondary">Pending</Badge>
+                              </div>
                             </div>
                             <p className="text-sm">{collab.description}</p>
                             {collab.proof_url && (

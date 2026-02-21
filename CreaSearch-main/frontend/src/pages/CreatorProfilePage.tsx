@@ -9,8 +9,9 @@ import { ReviewList } from "@/components/ReviewList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Star, Loader2, AlertCircle } from "lucide-react";
-import { profileApi, reviewsApi, Profile, Review } from "@/lib/api";
+import { Button } from "@/components/ui/button";
+import { Calendar, Star, Loader2, AlertCircle, Handshake, CheckCircle2, ExternalLink } from "lucide-react";
+import { profileApi, reviewsApi, collaborationApi, Profile, Review, Collaboration } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import creatorImage from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
 
@@ -27,6 +28,20 @@ export default function CreatorProfilePage() {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [userHasApprovedProfile, setUserHasApprovedProfile] = useState(false);
   const [userHasReviewed, setUserHasReviewed] = useState(false);
+
+  // Collaboration state
+  const [collaborations, setCollaborations] = useState<Collaboration[]>([]);
+  const [collabsLoading, setCollabsLoading] = useState(false);
+  const [showCollabForm, setShowCollabForm] = useState(false);
+  const [collabSubmitting, setCollabSubmitting] = useState(false);
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
+  const [collabForm, setCollabForm] = useState({
+    description: '',
+    proof_url: '',
+    is_external: false,
+    external_partner_name: '',
+    external_partner_url: '',
+  });
 
   useEffect(() => {
     async function fetchProfile() {
@@ -77,8 +92,9 @@ export default function CreatorProfilePage() {
         return;
       }
       try {
-        const userProfile = await profileApi.getMyProfile(user.id);
-        setUserHasApprovedProfile(userProfile?.status === 'approved');
+        const up = await profileApi.getMyProfile(user.id);
+        setUserProfile(up);
+        setUserHasApprovedProfile(up?.status === 'approved');
       } catch {
         setUserHasApprovedProfile(false);
       }
@@ -86,10 +102,54 @@ export default function CreatorProfilePage() {
     checkUserProfile();
   }, [user?.id]);
 
+  // Fetch collaborations
+  useEffect(() => {
+    async function fetchCollabs() {
+      if (!profile?.id) return;
+      setCollabsLoading(true);
+      try {
+        const data = await collaborationApi.getByProfileId(profile.id);
+        setCollaborations(data.filter(c => c.status === 'approved'));
+      } catch (err) {
+        console.error("Error fetching collaborations:", err);
+      } finally {
+        setCollabsLoading(false);
+      }
+    }
+    fetchCollabs();
+  }, [profile?.id]);
+
   // Handle new review submission
   const handleReviewSubmitted = (newReview: Review) => {
     setReviews(prev => [newReview, ...prev]);
-    setUserHasReviewed(true); // Hide form after submission
+    setUserHasReviewed(true);
+  };
+
+  // Handle collab submission
+  const handleCollabSubmit = async () => {
+    if (!profile?.id || !userProfile?.id) return;
+    if (!collabForm.description.trim()) return;
+    if (collabForm.is_external && !collabForm.external_partner_name.trim()) return;
+
+    setCollabSubmitting(true);
+    try {
+      await collaborationApi.create({
+        requester_profile_id: userProfile.id,
+        partner_profile_id: collabForm.is_external ? undefined : profile.id,
+        description: collabForm.description,
+        proof_url: collabForm.proof_url || undefined,
+        is_external: collabForm.is_external,
+        external_partner_name: collabForm.is_external ? collabForm.external_partner_name : undefined,
+        external_partner_url: collabForm.is_external ? collabForm.external_partner_url : undefined,
+      });
+      setShowCollabForm(false);
+      setCollabForm({ description: '', proof_url: '', is_external: false, external_partner_name: '', external_partner_url: '' });
+      // Show success state - collab is now pending admin review
+    } catch (err) {
+      console.error("Error submitting collaboration:", err);
+    } finally {
+      setCollabSubmitting(false);
+    }
   };
 
   if (isLoading) {
@@ -144,6 +204,12 @@ export default function CreatorProfilePage() {
               <Tabs defaultValue="about" className="w-full">
                 <TabsList className="w-full justify-start" data-testid="tabs-profile">
                   <TabsTrigger value="about">About</TabsTrigger>
+                  <TabsTrigger value="collaborations">
+                    Collaborations
+                    {collaborations.length > 0 && (
+                      <Badge variant="secondary" className="ml-1 text-xs">{collaborations.length}</Badge>
+                    )}
+                  </TabsTrigger>
                   <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
                   <TabsTrigger value="reviews">Reviews</TabsTrigger>
                 </TabsList>
@@ -236,6 +302,111 @@ export default function CreatorProfilePage() {
                   <div className="text-center py-12 text-muted-foreground">
                     <p>Portfolio items coming soon...</p>
                   </div>
+                </TabsContent>
+
+                <TabsContent value="collaborations" className="space-y-6 mt-6">
+                  {/* Submit Collab Button - only for other users with approved profiles */}
+                  {user && profile?.user_id !== user.id && userHasApprovedProfile && (
+                    <Card>
+                      <CardContent className="pt-6">
+                        {!showCollabForm ? (
+                          <div className="text-center">
+                            <Handshake className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground mb-3">
+                              Worked with {profile.name}? Submit a collaboration for verification.
+                            </p>
+                            <Button onClick={() => setShowCollabForm(true)} variant="outline">
+                              <Handshake className="w-4 h-4 mr-2" />
+                              Submit Collaboration
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            <h4 className="font-semibold text-sm">Submit Collaboration with {profile.name}</h4>
+                            <div>
+                              <label className="text-sm font-medium">Description *</label>
+                              <textarea
+                                className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                                rows={3}
+                                placeholder="Describe your collaboration (e.g., joint video, brand campaign, event)..."
+                                value={collabForm.description}
+                                onChange={(e) => setCollabForm(prev => ({ ...prev, description: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium">Proof URL (optional)</label>
+                              <input
+                                className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                                placeholder="Link to proof (screenshot, post, video)"
+                                value={collabForm.proof_url}
+                                onChange={(e) => setCollabForm(prev => ({ ...prev, proof_url: e.target.value }))}
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleCollabSubmit} disabled={collabSubmitting || !collabForm.description.trim()}>
+                                {collabSubmitting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
+                                Submit for Review
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => setShowCollabForm(false)}>
+                                Cancel
+                              </Button>
+                            </div>
+                            <p className="text-xs text-muted-foreground">Your submission will be reviewed by an admin before counting.</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Collaboration History */}
+                  {collabsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="w-6 h-6 animate-spin" />
+                    </div>
+                  ) : collaborations.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <Handshake className="w-12 h-12 mx-auto mb-4 opacity-40" />
+                      <p>No verified collaborations yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {collaborations.map((collab) => (
+                        <Card key={collab.id}>
+                          <CardContent className="pt-6">
+                            <div className="flex items-start justify-between">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Handshake className="w-4 h-4 text-green-600" />
+                                  <span className="font-medium text-sm">
+                                    {collab.is_external
+                                      ? collab.external_partner_name
+                                      : (collab.requester_profile_id === profile?.id ? 'Partner' : profile?.name)}
+                                  </span>
+                                  {collab.is_external && (
+                                    <Badge variant="outline" className="text-xs">External</Badge>
+                                  )}
+                                </div>
+                                <p className="text-sm text-muted-foreground">{collab.description}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="default" className="bg-green-500 text-xs">Verified</Badge>
+                                {collab.external_partner_url && (
+                                  <a href={collab.external_partner_url} target="_blank" rel="noopener noreferrer">
+                                    <ExternalLink className="w-3 h-3 text-blue-500" />
+                                  </a>
+                                )}
+                              </div>
+                            </div>
+                            {collab.proof_url && (
+                              <a href={collab.proof_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 underline mt-2 inline-block">
+                                View Proof
+                              </a>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </TabsContent>
 
                 <TabsContent value="reviews" className="space-y-6 mt-6">

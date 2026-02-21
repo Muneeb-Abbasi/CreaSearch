@@ -5,7 +5,8 @@
  * 
  * Schedule:
  * - YouTube: Weekly refresh (every Sunday at 3 AM)
- * - Instagram: Not auto-refreshed (quota-limited)
+ * - Instagram Queue: Process queued verifications (every 4 hours)
+ * - Verification Retry: Process failed tasks ready for retry (every hour)
  */
 
 import cron from 'node-cron';
@@ -48,6 +49,16 @@ async function refreshYouTubeForAccount(account: SocialAccount): Promise<boolean
         return false;
     } catch (error) {
         logger.error(`[Cron] Failed to refresh YouTube for profile ${account.profile_id}:`, error);
+
+        // Enqueue failed YouTube refresh for retry
+        try {
+            const { verificationQueueService } = await import('./verification-queue');
+            await verificationQueueService.enqueue(account.profile_id, 'youtube', account.platform_url, 'retry');
+            logger.info(`[Cron] Enqueued YouTube retry for profile ${account.profile_id}`);
+        } catch (enqueueError) {
+            logger.error(`[Cron] Failed to enqueue YouTube retry:`, enqueueError);
+        }
+
         return false;
     }
 }
@@ -87,12 +98,41 @@ async function refreshAllYouTubeProfiles(): Promise<{ updated: number; failed: n
             }
         }
 
-        logger.info(`[Cron] YouTube refresh complete: ${stats.updated}/${stats.total} updated, ${stats.failed} failed`);
+        logger.info(`[Cron] YouTube refresh complete: ${stats.updated}/${stats.total} updated, ${stats.failed} failed (${stats.failed} enqueued for retry)`);
     } catch (error) {
         logger.error('[Cron] YouTube refresh job failed:', error);
     }
 
     return stats;
+}
+
+/**
+ * Process queued Instagram verifications
+ */
+async function processInstagramQueue(): Promise<void> {
+    logger.info('[Cron] Processing Instagram verification queue...');
+    try {
+        const { verificationQueueService } = await import('./verification-queue');
+        const stats = await verificationQueueService.processQueue('instagram', 2); // Process max 2 to stay within quota
+        logger.info(`[Cron] Instagram queue: ${stats.processed} processed, ${stats.succeeded} succeeded, ${stats.failed} failed`);
+    } catch (error) {
+        logger.error('[Cron] Instagram queue processing failed:', error);
+    }
+}
+
+/**
+ * Process all verification retries that are ready
+ */
+async function processRetryQueue(): Promise<void> {
+    try {
+        const { verificationQueueService } = await import('./verification-queue');
+        const stats = await verificationQueueService.processQueue(undefined, 5); // Process up to 5 retries
+        if (stats.processed > 0) {
+            logger.info(`[Cron] Retry queue: ${stats.processed} processed, ${stats.succeeded} succeeded, ${stats.failed} failed`);
+        }
+    } catch (error) {
+        logger.error('[Cron] Retry queue processing failed:', error);
+    }
 }
 
 /**
@@ -109,11 +149,27 @@ export function initializeCronJobs(): void {
         logger.info('[Cron] Running scheduled YouTube refresh...');
         await refreshAllYouTubeProfiles();
     }, {
-        timezone: 'Asia/Karachi' // Pakistan time
+        timezone: 'Asia/Karachi'
+    });
+
+    // Instagram queue processing - Every 4 hours
+    cron.schedule('0 */4 * * *', async () => {
+        await processInstagramQueue();
+    }, {
+        timezone: 'Asia/Karachi'
+    });
+
+    // Verification retry processor - Every hour
+    cron.schedule('30 * * * *', async () => {
+        await processRetryQueue();
+    }, {
+        timezone: 'Asia/Karachi'
     });
 
     logger.info('[Cron] Scheduled jobs initialized:');
     logger.info('  - YouTube refresh: Weekly (Sunday 3:00 AM PKT)');
+    logger.info('  - Instagram queue: Every 4 hours');
+    logger.info('  - Verification retries: Every hour (at :30)');
 
     cronInitialized = true;
 }

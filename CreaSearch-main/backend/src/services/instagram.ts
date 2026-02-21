@@ -205,11 +205,18 @@ export async function queueInstagramVerification(
     profileId: string,
     profileUrl: string
 ): Promise<{ queued: boolean; message: string }> {
-    // For now, this just marks the profile as PENDING
-    // In a full implementation, this would add to a database queue
-    // that a cron job processes
-    return {
-        queued: true,
-        message: 'Instagram verification queued. Will be processed within 24 hours.'
-    };
+    try {
+        const { verificationQueueService } = await import('./verification-queue');
+        await verificationQueueService.enqueue(profileId, 'instagram', profileUrl, 'initial');
+        return {
+            queued: true,
+            message: 'Instagram verification queued. Will be processed within 4 hours.'
+        };
+    } catch (error: any) {
+        logger.error('[Instagram] Failed to enqueue verification:', error.message);
+        return {
+            queued: false,
+            message: `Failed to queue verification: ${error.message}`
+        };
+    }
 }

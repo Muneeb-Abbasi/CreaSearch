@@ -544,7 +544,7 @@ export const featuredProfileApi = {
 export interface Collaboration {
     id: string;
     requester_profile_id: string;
-    partner_profile_id: string;
+    partner_profile_id: string | null;
     description: string;
     proof_url: string | null;
     status: 'pending' | 'approved' | 'rejected';
@@ -553,10 +553,22 @@ export interface Collaboration {
     approved_at: string | null;
     created_at: string;
     updated_at: string;
+    // External collaboration fields
+    external_partner_name: string | null;
+    external_partner_url: string | null;
+    is_external: boolean;
 }
 
 export const collaborationApi = {
-    async create(data: { requester_profile_id: string; partner_profile_id: string; description: string; proof_url?: string }): Promise<Collaboration> {
+    async create(data: {
+        requester_profile_id: string;
+        partner_profile_id?: string;
+        description: string;
+        proof_url?: string;
+        is_external?: boolean;
+        external_partner_name?: string;
+        external_partner_url?: string;
+    }): Promise<Collaboration> {
         return fetchWithError<Collaboration>(`${API_BASE}/collaborations`, {
             method: 'POST',
             body: JSON.stringify(data),
@@ -582,6 +594,23 @@ export const collaborationApi = {
         return fetchWithError<Collaboration>(`${API_BASE}/admin/collaborations/${id}/reject`, {
             method: 'PUT',
             body: JSON.stringify({ admin_notes: adminNotes }),
+        });
+    },
+
+    // Admin: create a collaboration on behalf of a user
+    async adminCreate(data: {
+        requester_profile_id: string;
+        partner_profile_id?: string;
+        description: string;
+        proof_url?: string;
+        is_external?: boolean;
+        external_partner_name?: string;
+        external_partner_url?: string;
+        auto_approve?: boolean;
+    }): Promise<Collaboration> {
+        return fetchWithError<Collaboration>(`${API_BASE}/admin/collaborations`, {
+            method: 'POST',
+            body: JSON.stringify(data),
         });
     },
 };

@@ -951,7 +951,7 @@ export const featuredProfileService = {
 export interface Collaboration {
     id: string;
     requester_profile_id: string;
-    partner_profile_id: string;
+    partner_profile_id: string | null;
     description: string;
     proof_url: string | null;
     status: 'pending' | 'approved' | 'rejected';
@@ -960,10 +960,22 @@ export interface Collaboration {
     approved_at: string | null;
     created_at: string;
     updated_at: string;
+    // External collaboration fields
+    external_partner_name: string | null;
+    external_partner_url: string | null;
+    is_external: boolean;
 }
 
 export const collaborationService = {
     async create(collab: Omit<Collaboration, 'id' | 'status' | 'admin_notes' | 'approved_by' | 'approved_at' | 'created_at' | 'updated_at'>): Promise<Collaboration> {
+        // Validation: external collabs must have external_partner_name
+        if (collab.is_external && !collab.external_partner_name) {
+            throw new Error('External collaborations must include a partner name');
+        }
+        // Validation: internal collabs must have partner_profile_id
+        if (!collab.is_external && !collab.partner_profile_id) {
+            throw new Error('Internal collaborations must include a partner profile ID');
+        }
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
             .from('collaborations')
@@ -1035,9 +1047,12 @@ export const collaborationService = {
 
         if (error) throw error;
 
-        // Increment collaboration_count for both profiles
+        // Increment collaboration_count for requester always
         await supabase.rpc('increment_collab_count', { profile_id_param: collab.requester_profile_id });
-        await supabase.rpc('increment_collab_count', { profile_id_param: collab.partner_profile_id });
+        // Only increment partner count for internal collabs
+        if (collab.partner_profile_id) {
+            await supabase.rpc('increment_collab_count', { profile_id_param: collab.partner_profile_id });
+        }
 
         return data;
     },

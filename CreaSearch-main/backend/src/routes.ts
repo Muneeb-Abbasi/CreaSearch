@@ -980,10 +980,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/collaborations - Submit a collaboration request
   app.post("/api/collaborations", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
     try {
-      const { requester_profile_id, partner_profile_id, description, proof_url } = req.body;
+      const { requester_profile_id, partner_profile_id, description, proof_url, is_external, external_partner_name, external_partner_url } = req.body;
 
-      if (!requester_profile_id || !partner_profile_id || !description) {
-        return res.status(400).json({ error: "Missing required fields: requester_profile_id, partner_profile_id, description" });
+      if (!requester_profile_id || !description) {
+        return res.status(400).json({ error: "Missing required fields: requester_profile_id, description" });
+      }
+
+      // For internal collabs, partner_profile_id is required
+      if (!is_external && !partner_profile_id) {
+        return res.status(400).json({ error: "partner_profile_id is required for internal collaborations" });
+      }
+
+      // For external collabs, external_partner_name is required
+      if (is_external && !external_partner_name) {
+        return res.status(400).json({ error: "external_partner_name is required for external collaborations" });
       }
 
       // Verify the requester owns the profile
@@ -992,17 +1002,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "You can only submit collaborations from your own profile" });
       }
 
-      // Verify the partner profile exists
-      const partnerProfile = await profileService.getById(partner_profile_id);
-      if (!partnerProfile) {
-        return res.status(404).json({ error: "Partner profile not found" });
+      // Verify the partner profile exists (only for internal collabs)
+      if (!is_external && partner_profile_id) {
+        const partnerProfile = await profileService.getById(partner_profile_id);
+        if (!partnerProfile) {
+          return res.status(404).json({ error: "Partner profile not found" });
+        }
       }
 
       const collab = await collaborationService.create({
         requester_profile_id,
-        partner_profile_id,
+        partner_profile_id: is_external ? null : partner_profile_id,
         description,
         proof_url: proof_url || null,
+        is_external: is_external || false,
+        external_partner_name: external_partner_name || null,
+        external_partner_url: external_partner_url || null,
       });
 
       res.status(201).json(collab);
@@ -1042,9 +1057,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const collab = await collaborationService.approve(req.params.id, adminUserId, admin_notes);
 
-      // Recalculate scores for both profiles
+      // Recalculate scores for requester always
       await scoringService.updateProfileScore(collab.requester_profile_id);
-      await scoringService.updateProfileScore(collab.partner_profile_id);
+      // Recalculate for partner only if internal collab
+      if (collab.partner_profile_id) {
+        await scoringService.updateProfileScore(collab.partner_profile_id);
+      }
 
       // Log admin action
       await adminActionLogService.create({
@@ -1052,20 +1070,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         action: 'approve_collaboration',
         target_type: 'profile',
         target_id: req.params.id,
-        details: { requester: collab.requester_profile_id, partner: collab.partner_profile_id }
+        details: {
+          requester: collab.requester_profile_id,
+          partner: collab.partner_profile_id,
+          is_external: collab.is_external,
+          external_partner_name: collab.external_partner_name
+        }
       });
 
-      // Send email notifications to both profiles
-      const [requesterProfile, partnerProfile] = await Promise.all([
-        profileService.getById(collab.requester_profile_id),
-        profileService.getById(collab.partner_profile_id),
-      ]);
+      // Send email notifications
+      const requesterProfile = await profileService.getById(collab.requester_profile_id);
+      const partnerName = collab.is_external
+        ? (collab.external_partner_name || 'External Partner')
+        : null;
+      const partnerProfile = collab.partner_profile_id
+        ? await profileService.getById(collab.partner_profile_id)
+        : null;
 
-      if (requesterProfile && partnerProfile) {
+      if (requesterProfile) {
+        const partnerDisplayName = partnerName || partnerProfile?.name || 'Partner';
         emailService.sendCollaborationApprovedEmail(
-          requesterProfile.user_id, requesterProfile.name, partnerProfile.name, collab.description
+          requesterProfile.user_id, requesterProfile.name, partnerDisplayName, collab.description
         ).catch(err => logger.error('[Email] Failed to send collab approve email (requester):', err));
+      }
 
+      // Send to partner only for internal collabs
+      if (partnerProfile && requesterProfile) {
         emailService.sendCollaborationApprovedEmail(
           partnerProfile.user_id, partnerProfile.name, requesterProfile.name, collab.description
         ).catch(err => logger.error('[Email] Failed to send collab approve email (partner):', err));
@@ -1092,16 +1122,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         action: 'reject_collaboration',
         target_type: 'profile',
         target_id: req.params.id,
-        details: { requester: collab.requester_profile_id, partner: collab.partner_profile_id }
+        details: {
+          requester: collab.requester_profile_id,
+          partner: collab.partner_profile_id,
+          is_external: collab.is_external,
+          external_partner_name: collab.external_partner_name
+        }
       });
 
       // Send email notification to requester
       const requesterProfile = await profileService.getById(collab.requester_profile_id);
-      const partnerProfile = await profileService.getById(collab.partner_profile_id);
+      const partnerName = collab.is_external
+        ? (collab.external_partner_name || 'External Partner')
+        : null;
+      const partnerProfile = collab.partner_profile_id
+        ? await profileService.getById(collab.partner_profile_id)
+        : null;
 
-      if (requesterProfile && partnerProfile) {
+      if (requesterProfile) {
+        const partnerDisplayName = partnerName || partnerProfile?.name || 'Partner';
         emailService.sendCollaborationRejectedEmail(
-          requesterProfile.user_id, requesterProfile.name, partnerProfile.name, collab.description, admin_notes
+          requesterProfile.user_id, requesterProfile.name, partnerDisplayName, collab.description, admin_notes
         ).catch(err => logger.error('[Email] Failed to send collab rejection email:', err));
       }
 
@@ -1109,6 +1150,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error rejecting collaboration:", error);
       res.status(500).json({ error: "Failed to reject collaboration" });
+    }
+  });
+
+  // POST /api/admin/collaborations - Admin: create a collaboration on behalf of a user
+  app.post("/api/admin/collaborations", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const adminUserId = req.user.id;
+      const { requester_profile_id, partner_profile_id, description, proof_url, is_external, external_partner_name, external_partner_url, auto_approve } = req.body;
+
+      if (!requester_profile_id || !description) {
+        return res.status(400).json({ error: "Missing required fields: requester_profile_id, description" });
+      }
+
+      if (is_external && !external_partner_name) {
+        return res.status(400).json({ error: "external_partner_name is required for external collaborations" });
+      }
+
+      if (!is_external && !partner_profile_id) {
+        return res.status(400).json({ error: "partner_profile_id is required for internal collaborations" });
+      }
+
+      // Verify the requester profile exists
+      const requesterProfile = await profileService.getById(requester_profile_id);
+      if (!requesterProfile) {
+        return res.status(404).json({ error: "Requester profile not found" });
+      }
+
+      const collab = await collaborationService.create({
+        requester_profile_id,
+        partner_profile_id: is_external ? null : partner_profile_id,
+        description,
+        proof_url: proof_url || null,
+        is_external: is_external || false,
+        external_partner_name: external_partner_name || null,
+        external_partner_url: external_partner_url || null,
+      });
+
+      // Auto-approve if requested
+      if (auto_approve) {
+        const approvedCollab = await collaborationService.approve(collab.id, adminUserId, 'Admin-created and auto-approved');
+
+        await scoringService.updateProfileScore(approvedCollab.requester_profile_id);
+        if (approvedCollab.partner_profile_id) {
+          await scoringService.updateProfileScore(approvedCollab.partner_profile_id);
+        }
+
+        await adminActionLogService.create({
+          admin_user_id: adminUserId,
+          action: 'admin_create_collaboration',
+          target_type: 'profile',
+          target_id: collab.id,
+          details: {
+            requester: requester_profile_id,
+            partner: partner_profile_id,
+            is_external,
+            external_partner_name,
+            auto_approved: true
+          }
+        });
+
+        return res.status(201).json(approvedCollab);
+      }
+
+      await adminActionLogService.create({
+        admin_user_id: adminUserId,
+        action: 'admin_create_collaboration',
+        target_type: 'profile',
+        target_id: collab.id,
+        details: {
+          requester: requester_profile_id,
+          partner: partner_profile_id,
+          is_external,
+          external_partner_name
+        }
+      });
+
+      res.status(201).json(collab);
+    } catch (error) {
+      logger.error("Error creating admin collaboration:", error);
+      res.status(500).json({ error: "Failed to create collaboration" });
+    }
+  });
+  // ============= VERIFICATION QUEUE ADMIN ROUTES =============
+
+  // GET /api/admin/verification-queue/stats - Get queue stats
+  app.get("/api/admin/verification-queue/stats", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const { verificationQueueService } = await import('./services/verification-queue');
+      const stats = await verificationQueueService.getQueueStats();
+      res.json(stats);
+    } catch (error) {
+      logger.error("Error fetching queue stats:", error);
+      res.status(500).json({ error: "Failed to fetch queue stats" });
+    }
+  });
+
+  // GET /api/admin/verification-queue/items - Get recent queue items
+  app.get("/api/admin/verification-queue/items", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { verificationQueueService } = await import('./services/verification-queue');
+      const limit = parseInt(req.query.limit as string) || 20;
+      const items = await verificationQueueService.getRecentItems(limit);
+      res.json(items);
+    } catch (error) {
+      logger.error("Error fetching queue items:", error);
+      res.status(500).json({ error: "Failed to fetch queue items" });
+    }
+  });
+
+  // POST /api/admin/verification-queue/:id/retry - Admin retry a task
+  app.post("/api/admin/verification-queue/:id/retry", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { verificationQueueService } = await import('./services/verification-queue');
+      const item = await verificationQueueService.adminRetry(req.params.id);
+      res.json(item);
+    } catch (error) {
+      logger.error("Error retrying queue task:", error);
+      res.status(500).json({ error: "Failed to retry task" });
+    }
+  });
+
+  // POST /api/admin/verification-queue/process - Manually trigger queue processing
+  app.post("/api/admin/verification-queue/process", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { verificationQueueService } = await import('./services/verification-queue');
+      const platform = req.body.platform;
+      const stats = await verificationQueueService.processQueue(platform, 3);
+      res.json(stats);
+    } catch (error) {
+      logger.error("Error processing queue:", error);
+      res.status(500).json({ error: "Failed to process queue" });
     }
   });
 
