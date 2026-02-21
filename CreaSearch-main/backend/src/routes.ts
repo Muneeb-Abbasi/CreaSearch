@@ -741,7 +741,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // GET /api/featured-profiles - Get featured profiles (public)
   app.get("/api/featured-profiles", async (req: Request, res: Response) => {
     try {
-      const featured = await featuredProfileService.getAll();
+      const profileType = req.query.profile_type as 'creator' | 'organization' | undefined;
+      const featured = await featuredProfileService.getAll(profileType);
       res.json(featured);
     } catch (error) {
       logger.error("Error fetching featured profiles:", error);
@@ -1057,19 +1058,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const collab = await collaborationService.approve(req.params.id, adminUserId, admin_notes);
 
-      // Recalculate scores for requester always
-      await scoringService.updateProfileScore(collab.requester_profile_id);
-      // Recalculate for partner only if internal collab
+      // Perform non-dependent operations in parallel
+      const requesterProfilePromise = profileService.getById(collab.requester_profile_id);
+      const partnerProfilePromise = collab.partner_profile_id ? profileService.getById(collab.partner_profile_id) : Promise.resolve(null);
+
+      const scoreUpdates = [
+        scoringService.updateProfileScore(collab.requester_profile_id)
+      ];
       if (collab.partner_profile_id) {
-        await scoringService.updateProfileScore(collab.partner_profile_id);
+        scoreUpdates.push(scoringService.updateProfileScore(collab.partner_profile_id));
       }
+
+      // Parallelize profile fetching and score updates
+      const [requesterProfile, partnerProfile] = await Promise.all([
+        requesterProfilePromise,
+        partnerProfilePromise,
+        ...scoreUpdates
+      ]);
 
       // Log admin action
       await adminActionLogService.create({
         admin_user_id: adminUserId,
         action: 'approve_collaboration',
-        target_type: 'profile',
-        target_id: req.params.id,
+        target_type: 'collaboration',
+        target_id: collab.id,
         details: {
           requester: collab.requester_profile_id,
           partner: collab.partner_profile_id,
@@ -1079,12 +1091,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Send email notifications
-      const requesterProfile = await profileService.getById(collab.requester_profile_id);
       const partnerName = collab.is_external
         ? (collab.external_partner_name || 'External Partner')
-        : null;
-      const partnerProfile = collab.partner_profile_id
-        ? await profileService.getById(collab.partner_profile_id)
         : null;
 
       if (requesterProfile) {
@@ -1116,12 +1124,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const collab = await collaborationService.reject(req.params.id, adminUserId, admin_notes);
 
+      // Fetch profiles in parallel for notification
+      const requesterProfilePromise = profileService.getById(collab.requester_profile_id);
+      const partnerProfilePromise = collab.partner_profile_id ? profileService.getById(collab.partner_profile_id) : Promise.resolve(null);
+
       // Log admin action
       await adminActionLogService.create({
         admin_user_id: adminUserId,
         action: 'reject_collaboration',
-        target_type: 'profile',
-        target_id: req.params.id,
+        target_type: 'collaboration',
+        target_id: collab.id,
         details: {
           requester: collab.requester_profile_id,
           partner: collab.partner_profile_id,
@@ -1130,13 +1142,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
+      const [requesterProfile, partnerProfile] = await Promise.all([requesterProfilePromise, partnerProfilePromise]);
+
       // Send email notification to requester
-      const requesterProfile = await profileService.getById(collab.requester_profile_id);
       const partnerName = collab.is_external
         ? (collab.external_partner_name || 'External Partner')
-        : null;
-      const partnerProfile = collab.partner_profile_id
-        ? await profileService.getById(collab.partner_profile_id)
         : null;
 
       if (requesterProfile) {
@@ -1199,7 +1209,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await adminActionLogService.create({
           admin_user_id: adminUserId,
           action: 'admin_create_collaboration',
-          target_type: 'profile',
+          target_type: 'collaboration',
           target_id: collab.id,
           details: {
             requester: requester_profile_id,
@@ -1216,7 +1226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await adminActionLogService.create({
         admin_user_id: adminUserId,
         action: 'admin_create_collaboration',
-        target_type: 'profile',
+        target_type: 'collaboration',
         target_id: collab.id,
         details: {
           requester: requester_profile_id,

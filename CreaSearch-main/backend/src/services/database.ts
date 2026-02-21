@@ -910,12 +910,19 @@ export interface FeaturedProfile {
 }
 
 export const featuredProfileService = {
-    async getAll(): Promise<FeaturedProfile[]> {
+    async getAll(profileType?: 'creator' | 'organization'): Promise<FeaturedProfile[]> {
         const supabase = getSupabaseClient();
-        const { data, error } = await supabase
+
+        let query = supabase
             .from('featured_profiles')
-            .select('*')
+            .select('*, profiles!inner(profile_type)')
             .order('sort_order', { ascending: true });
+
+        if (profileType) {
+            query = query.eq('profiles.profile_type', profileType);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
         return data || [];

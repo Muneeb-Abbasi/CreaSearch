@@ -259,6 +259,7 @@ export default function SearchPage() {
           niche_id: nicheFilter || undefined,
           collaborationType: selectedTypes[0] || undefined,
           minFollowers: followerRange[0] > 0 ? followerRange[0] * 1000 : undefined,
+          profile_type: 'creator',
         });
         // Transform API profiles to match component format
         const transformed = profiles.map((profile: Profile, index: number) => ({

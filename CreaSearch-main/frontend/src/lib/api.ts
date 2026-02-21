@@ -520,8 +520,11 @@ export interface FeaturedProfile {
 }
 
 export const featuredProfileApi = {
-    async getAll(): Promise<FeaturedProfile[]> {
-        return fetchWithError<FeaturedProfile[]>(`${API_BASE}/featured-profiles`);
+    async getAll(profileType?: 'creator' | 'organization'): Promise<FeaturedProfile[]> {
+        const url = profileType
+            ? `${API_BASE}/featured-profiles?profile_type=${profileType}`
+            : `${API_BASE}/featured-profiles`;
+        return fetchWithError<FeaturedProfile[]>(url);
     },
 
     async feature(profileId: string, sortOrder?: number, expiresAt?: string): Promise<FeaturedProfile> {

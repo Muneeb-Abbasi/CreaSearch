@@ -69,7 +69,7 @@ export function FeaturedCreatorsSection() {
   useEffect(() => {
     async function fetchFeatured() {
       try {
-        const featured = await featuredProfileApi.getAll();
+        const featured = await featuredProfileApi.getAll('creator');
 
         if (featured.length === 0) {
           setCreators(FALLBACK_CREATORS);
