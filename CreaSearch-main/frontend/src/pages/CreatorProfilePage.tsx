@@ -210,7 +210,6 @@ export default function CreatorProfilePage() {
                       <Badge variant="secondary" className="ml-1 text-xs">{collaborations.length}</Badge>
                     )}
                   </TabsTrigger>
-                  <TabsTrigger value="portfolio">Portfolio</TabsTrigger>
                   <TabsTrigger value="reviews">Reviews</TabsTrigger>
                 </TabsList>
 
@@ -298,11 +297,6 @@ export default function CreatorProfilePage() {
                   )}
                 </TabsContent>
 
-                <TabsContent value="portfolio" className="space-y-6 mt-6">
-                  <div className="text-center py-12 text-muted-foreground">
-                    <p>Portfolio items coming soon...</p>
-                  </div>
-                </TabsContent>
 
                 <TabsContent value="collaborations" className="space-y-6 mt-6">
                   {/* Submit Collab Button - only for other users with approved profiles */}
@@ -432,23 +426,6 @@ export default function CreatorProfilePage() {
             </div>
 
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Availability</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <Calendar className="w-5 h-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium">Available for projects</p>
-                      <p className="text-sm text-muted-foreground">Contact for availability</p>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="w-full justify-center py-2">
-                    {profile.status === 'approved' ? 'Accepting Inquiries' : 'Profile Under Review'}
-                  </Badge>
-                </CardContent>
-              </Card>
 
               <Card>
                 <CardHeader>

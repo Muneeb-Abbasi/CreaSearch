@@ -11,7 +11,7 @@
  *   const result = await verifyInstagramProfile('https://instagram.com/username');
  */
 
-const APIFY_TOKEN = process.env.APIFY_TOKEN;
+const APIFY_TOKEN = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN;
 const REQUEST_TIMEOUT = 120000; // 120 seconds
 import { logger } from '../utils/logger';
 
