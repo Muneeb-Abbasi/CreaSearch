@@ -11,7 +11,7 @@ export default function ProfileHeaderExample() {
       score={85}
       verified={true}
       followerCount={250000}
-      completedGigs={47}
+      verifiedCollabCount={47}
       tags={["Tech", "Education", "YouTube", "Podcasts", "Public Speaking"]}
     />
   );

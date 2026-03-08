@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Calendar, Star, Loader2, AlertCircle, Handshake, CheckCircle2, ExternalLink } from "lucide-react";
+import { Loader2, AlertCircle, Handshake, CheckCircle2, ExternalLink } from "lucide-react";
 import { profileApi, reviewsApi, collaborationApi, Profile, Review, Collaboration } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import creatorImage from "@assets/generated_images/Pakistani_female_creator_headshot_b1688276.png";
@@ -190,7 +190,7 @@ export default function CreatorProfilePage() {
           score={profile.creasearch_score || 80}
           verified={(profile.verified_socials?.length || 0) > 0}
           followerCount={profile.follower_total || 0}
-          completedGigs={profile.gigs_completed || 0}
+          verifiedCollabCount={collaborations.length}
           tags={profile.collaboration_types || []}
           socialLinks={profile.social_links as unknown as { youtube?: string; instagram?: string; facebook?: string; linkedin?: string; twitter?: string } | undefined}
           onInquiryClick={() => setInquiryModalOpen(true)}
@@ -269,34 +269,7 @@ export default function CreatorProfilePage() {
                     </Card>
                   )}
 
-                  {profile.social_links && Object.keys(profile.social_links).length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Social Media</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex flex-wrap gap-2">
-                          {Object.entries(profile.social_links).map(([platform, value]) => {
-                            const url = typeof value === 'string' ? value : (value as any)?.url;
-                            if (!url) return null;
-                            return (
-                              <a
-                                key={platform}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex"
-                              >
-                                <Badge variant="secondary" className="capitalize hover:bg-primary hover:text-primary-foreground cursor-pointer">
-                                  {platform}
-                                </Badge>
-                              </a>
-                            );
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
+
                 </TabsContent>
 
 
@@ -495,10 +468,6 @@ export default function CreatorProfilePage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Followers</span>
                     <span className="font-semibold">{(profile.follower_total || 0).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Completed Gigs</span>
-                    <span className="font-semibold">{profile.gigs_completed || 0}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Verified Collaborations</span>

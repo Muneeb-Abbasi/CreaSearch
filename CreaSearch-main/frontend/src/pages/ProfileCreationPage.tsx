@@ -28,7 +28,6 @@ import {
   validateInstagramUrl,
   validateYouTubeUrl,
   validateLinkedInUrl,
-  validateTwitterUrl,
   validateUrl,
   ValidationResult
 } from "@/utils/validation";
@@ -71,7 +70,6 @@ export default function ProfileCreationPage() {
     instagram: "",
     facebook: "",
     linkedin: "",
-    twitter: "",
     agreedToTerms: false,
   });
 
@@ -252,8 +250,7 @@ export default function ProfileCreationPage() {
       formData.youtube,
       formData.instagram,
       formData.facebook,
-      formData.linkedin,
-      formData.twitter
+      formData.linkedin
     ].filter(url => url && url.trim().length > 0).length;
 
     if (socialCount < 2) {
@@ -329,8 +326,8 @@ export default function ProfileCreationPage() {
     const socialCount = [
       formData.youtube,
       formData.instagram,
-      formData.linkedin,
-      formData.twitter
+      formData.facebook,
+      formData.linkedin
     ].filter(url => url && url.trim().length > 0).length;
 
     if (socialCount < 2) {
@@ -358,7 +355,6 @@ export default function ProfileCreationPage() {
       if (formData.instagram) socialLinks.instagram = { url: formData.instagram, status: 'PENDING' };
       if (formData.facebook) socialLinks.facebook = { url: formData.facebook, status: 'PENDING' };
       if (formData.linkedin) socialLinks.linkedin = formData.linkedin;
-      if (formData.twitter) socialLinks.twitter = formData.twitter;
 
       // Upload photo first if selected
       let avatarUrl: string | null = null;
@@ -502,7 +498,7 @@ export default function ProfileCreationPage() {
     if (formData.phone) score += 10;
     if (formData.bio) score += 15;
     if (formData.collaborationTypes.length > 0) score += 10;
-    if (formData.youtube || formData.instagram || formData.facebook || formData.linkedin || formData.twitter) score += 15;
+    if (formData.youtube || formData.instagram || formData.facebook || formData.linkedin) score += 15;
     return score;
   };
 
@@ -590,7 +586,6 @@ export default function ProfileCreationPage() {
                         instagram: typeof igLink === 'object' ? igLink?.url || "" : igLink || "",
                         facebook: typeof fbLink === 'object' ? fbLink?.url || "" : fbLink || "",
                         linkedin: existingProfile.social_links?.linkedin || "",
-                        twitter: existingProfile.social_links?.twitter || "",
                         agreedToTerms: false,
                       });
                       setIsEditing(true); // Show form while keeping existingProfile reference for update
@@ -933,19 +928,19 @@ export default function ProfileCreationPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="twitter">Twitter/X</Label>
+                    <Label htmlFor="facebook">Facebook Profile / Page</Label>
                     <Input
-                      id="twitter"
-                      placeholder="https://twitter.com/username"
-                      value={formData.twitter}
+                      id="facebook"
+                      placeholder="https://facebook.com/yourpage"
+                      value={formData.facebook}
                       onChange={(e) => {
-                        setFormData({ ...formData, twitter: e.target.value });
-                        const result = validateTwitterUrl(e.target.value);
-                        setErrors(prev => ({ ...prev, twitter: result.error || '' }));
+                        setFormData({ ...formData, facebook: e.target.value });
+                        const result = validateUrl(e.target.value, 'Facebook URL');
+                        setErrors(prev => ({ ...prev, facebook: result.error || '' }));
                       }}
-                      data-testid="input-twitter"
+                      data-testid="input-facebook"
                     />
-                    {errors.twitter && <p className="text-xs text-red-500">{errors.twitter}</p>}
+                    {errors.facebook && <p className="text-xs text-red-500">{errors.facebook}</p>}
                   </div>
                 </div>
 

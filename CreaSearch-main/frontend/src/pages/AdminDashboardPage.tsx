@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle, Star, ScrollText, Handshake } from "lucide-react";
+import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle, Star, Handshake } from "lucide-react";
 import { SiYoutube, SiInstagram, SiFacebook } from "react-icons/si";
 import { useAuth } from "@/contexts/AuthContext";
-import { adminApi, profileApi, featuredProfileApi, collaborationApi, Profile, type AdminActionLog, type Collaboration } from "@/lib/api";
+import { adminApi, profileApi, featuredProfileApi, collaborationApi, Profile, type Collaboration } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ProfileDetailModal } from "@/components/ProfileDetailModal";
 import { AdminCategoriesTab } from "@/components/AdminCategoriesTab";
@@ -79,8 +79,7 @@ export default function AdminDashboardPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [featuredIds, setFeaturedIds] = useState<Set<string>>(new Set());
   const [featureLoading, setFeatureLoading] = useState<string | null>(null);
-  const [actionLogs, setActionLogs] = useState<AdminActionLog[]>([]);
-  const [actionLogLoading, setActionLogLoading] = useState(false);
+
   const [pendingCollabs, setPendingCollabs] = useState<Collaboration[]>([]);
   const [allCollabs, setAllCollabs] = useState<Collaboration[]>([]);
   const [collabLoading, setCollabLoading] = useState<string | null>(null);
@@ -194,17 +193,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const fetchActionLogs = async () => {
-    setActionLogLoading(true);
-    try {
-      const logs = await adminApi.getActionLog(50);
-      setActionLogs(logs);
-    } catch {
-      toast({ title: "Error", description: "Failed to load action log", variant: "destructive" });
-    } finally {
-      setActionLogLoading(false);
-    }
-  };
+
 
   const fetchPendingCollabs = async () => {
     try {
@@ -593,7 +582,7 @@ export default function AdminDashboardPage() {
                 </TabsTrigger>
                 <TabsTrigger value="users">All Profiles</TabsTrigger>
                 <TabsTrigger value="collaborations" onClick={() => { if (pendingCollabs.length === 0) fetchPendingCollabs(); fetchAllCollabs(); }}>Collaborations</TabsTrigger>
-                <TabsTrigger value="action-log" onClick={() => actionLogs.length === 0 && fetchActionLogs()}>Action Log</TabsTrigger>
+
                 <TabsTrigger value="categories">Categories</TabsTrigger>
               </TabsList>
 
@@ -818,53 +807,7 @@ export default function AdminDashboardPage() {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="action-log" className="mt-6">
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <CardTitle>Admin Action Log</CardTitle>
-                      <Button variant="outline" size="sm" onClick={fetchActionLogs} disabled={actionLogLoading}>
-                        <RefreshCw className={`w-4 h-4 mr-1 ${actionLogLoading ? 'animate-spin' : ''}`} />
-                        Refresh
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {actionLogLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="w-6 h-6 animate-spin" />
-                      </div>
-                    ) : actionLogs.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <ScrollText className="w-12 h-12 mx-auto mb-4 opacity-40" />
-                        <p>No admin actions logged yet.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {actionLogs.map((log) => (
-                          <div key={log.id} className="flex items-center justify-between p-3 border rounded-md">
-                            <div className="flex items-center gap-3">
-                              <Badge
-                                variant={log.action.includes('approve') || log.action.includes('feature') ? 'default' : 'destructive'}
-                                className={`text-xs ${log.action.includes('approve') || log.action.includes('feature') ? 'bg-green-500' : ''}`}
-                              >
-                                {log.action.replace(/_/g, ' ')}
-                              </Badge>
-                              <div>
-                                <p className="text-sm">
-                                  <span className="font-medium">{log.target_type}</span>
-                                  <span className="text-muted-foreground"> — {log.target_id.slice(0, 8)}...</span>
-                                </p>
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground">{formatDate(log.created_at)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
+
 
               <TabsContent value="collaborations" className="mt-6">
                 <Card>
@@ -1133,16 +1076,7 @@ export default function AdminDashboardPage() {
                                       Proof
                                     </a>
                                   )}
-                                  {collab.status === 'pending_admin' && (
-                                    <>
-                                      <Button size="sm" variant="outline" onClick={() => handleApproveCollab(collab.id)} disabled={collabLoading === collab.id}>
-                                        <CheckCircle2 className="w-3 h-3" />
-                                      </Button>
-                                      <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleRejectCollab(collab.id)} disabled={collabLoading === collab.id}>
-                                        <XCircle className="w-3 h-3" />
-                                      </Button>
-                                    </>
-                                  )}
+
                                 </div>
                               </div>
                             ))}

@@ -139,7 +139,7 @@ export const verificationQueueService = {
             if (task.platform === 'youtube') {
                 const result = await verifyYouTubeChannel(task.platform_url);
 
-                if (result.success && result.status === 'VERIFIED') {
+                if (result.status === 'VERIFIED') {
                     await socialAccountService.updateVerification(task.profile_id, 'youtube', {
                         verification_status: 'verified',
                         follower_count: result.subscribers || 0,
@@ -164,7 +164,7 @@ export const verificationQueueService = {
             } else if (task.platform === 'instagram') {
                 const result = await verifyInstagramProfile(task.platform_url);
 
-                if (result.success && result.status === 'VALIDATED') {
+                if (result.status === 'VALIDATED') {
                     await socialAccountService.updateVerification(task.profile_id, 'instagram', {
                         verification_status: 'verified',
                         follower_count: result.followers || 0,

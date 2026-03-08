@@ -165,6 +165,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Calculate initial Creasearch score
       await scoringService.updateProfileScore(profile.id);
 
+      // Send "profile submitted" confirmation email
+      emailService.sendProfileSubmittedEmail(userId, profile.name)
+        .catch(err => logger.error('[Email] Failed to send profile submitted email:', err));
+
       res.status(201).json(profile);
     } catch (error) {
       logger.error("Error creating profile:", error);

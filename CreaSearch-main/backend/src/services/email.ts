@@ -179,6 +179,35 @@ export const emailService = {
         return sendEmail(email, 'Update on Your Creasearch Profile Application', html);
     },
 
+
+    async sendProfileSubmittedEmail(userId: string, name: string): Promise<boolean> {
+        const email = await getUserEmail(userId);
+        if (!email) {
+            logger.info('[Email] No email found for user:', userId);
+            return false;
+        }
+
+        const html = wrapEmailBody(`
+            <h2 style="color: #1F2937; margin-bottom: 20px;">Profile Submitted! 📩</h2>
+            
+            <p style="color: #4B5563; font-size: 16px; line-height: 1.6;">
+                Hi ${name}, your creator profile has been submitted and is now under review 
+                by our team. We'll notify you once it's been reviewed.
+            </p>
+            
+            <div style="background-color: #EFF6FF; border-left: 4px solid #3B82F6; padding: 12px 16px; margin: 20px 0; border-radius: 0 6px 6px 0;">
+                <p style="color: #1E40AF; font-size: 14px; margin: 0;"><strong>What happens next?</strong></p>
+                <ul style="color: #1E40AF; font-size: 14px; margin: 8px 0 0 0; padding-left: 20px;">
+                    <li>Our team will review your profile within 24-48 hours</li>
+                    <li>You'll receive an email once your profile is approved or if changes are needed</li>
+                    <li>Your social media accounts will be verified in the background</li>
+                </ul>
+            </div>
+        `);
+
+        return sendEmail(email, '📩 Profile Submitted — Creasearch', html);
+    },
+
     // ─── Collaboration Emails ──────────────────────────────────
 
     async sendCollaborationApprovedEmail(

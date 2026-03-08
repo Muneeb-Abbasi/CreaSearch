@@ -3,8 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { CreasearchScore } from "./CreasearchScore";
 import { VerificationBadge } from "./VerificationBadge";
-import { MapPin, Users, Briefcase, MessageSquare, CheckCircle2 } from "lucide-react";
-import { SiYoutube, SiInstagram, SiLinkedin, SiX } from "react-icons/si";
+import { MapPin, Users, Handshake, MessageSquare, CheckCircle2 } from "lucide-react";
+import { SiYoutube, SiInstagram, SiFacebook } from "react-icons/si";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Enhanced social links with verification data
@@ -21,8 +21,7 @@ interface SocialLinkData {
 interface SocialLinks {
   youtube?: string | SocialLinkData;
   instagram?: string | SocialLinkData;
-  linkedin?: string;
-  twitter?: string;
+  facebook?: string | SocialLinkData;
 }
 
 interface ProfileHeaderProps {
@@ -33,7 +32,7 @@ interface ProfileHeaderProps {
   score: number;
   verified: boolean;
   followerCount: number;
-  completedGigs: number;
+  verifiedCollabCount: number;
   tags: string[];
   socialLinks?: SocialLinks;
   onInquiryClick?: () => void;
@@ -72,7 +71,7 @@ export function ProfileHeader({
   score,
   verified,
   followerCount,
-  completedGigs,
+  verifiedCollabCount,
   tags,
   socialLinks,
   onInquiryClick,
@@ -85,21 +84,31 @@ export function ProfileHeader({
 
   const youtubeUrl = getSocialUrl(socialLinks?.youtube);
   const instagramUrl = getSocialUrl(socialLinks?.instagram);
+  const facebookUrl = getSocialUrl(socialLinks?.facebook);
   const youtubeVerified = isVerified(socialLinks?.youtube);
   const instagramVerified = isVerified(socialLinks?.instagram);
+  const facebookVerified = isVerified(socialLinks?.facebook);
   const youtubeCount = getCount(socialLinks?.youtube);
   const instagramCount = getCount(socialLinks?.instagram);
+  const facebookCount = getCount(socialLinks?.facebook);
   const youtubeLastUpdated = getLastUpdated(socialLinks?.youtube);
   const instagramLastUpdated = getLastUpdated(socialLinks?.instagram);
+  const facebookLastUpdated = getLastUpdated(socialLinks?.facebook);
 
-  // Calculate total verified followers
-  const verifiedFollowerCount = (youtubeCount || 0) + (instagramCount || 0);
+  // Calculate total verified followers (Instagram + YouTube + Facebook)
+  const verifiedFollowerCount = (youtubeCount || 0) + (instagramCount || 0) + (facebookCount || 0);
   const displayFollowerCount = verifiedFollowerCount > 0 ? verifiedFollowerCount : followerCount;
 
   const formatDate = (dateStr: string | null): string => {
     if (!dateStr) return '';
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const formatCount = (count: number): string => {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(0)}K`;
+    return String(count);
   };
 
   return (
@@ -128,7 +137,6 @@ export function ProfileHeader({
                     <VerificationBadge type="video" verified={verified} />
                     {youtubeUrl && <VerificationBadge type="youtube" verified={youtubeVerified} />}
                     {instagramUrl && <VerificationBadge type="instagram" verified={instagramVerified} />}
-                    {socialLinks?.linkedin && <VerificationBadge type="linkedin" verified={true} />}
                   </div>
                 </div>
 
@@ -163,6 +171,9 @@ export function ProfileHeader({
                       {instagramCount !== null && (
                         <div>Instagram: {instagramCount.toLocaleString()} followers</div>
                       )}
+                      {facebookCount !== null && (
+                        <div>Facebook: {facebookCount.toLocaleString()} followers</div>
+                      )}
                       {verifiedFollowerCount === 0 && (
                         <div>User-reported: {followerCount.toLocaleString()}</div>
                       )}
@@ -170,8 +181,8 @@ export function ProfileHeader({
                   </TooltipContent>
                 </Tooltip>
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <Briefcase className="w-4 h-4" />
-                  <span>{completedGigs} completed gigs</span>
+                  <Handshake className="w-4 h-4" />
+                  <span>{verifiedCollabCount} verified collabs</span>
                 </div>
               </div>
 
@@ -196,11 +207,7 @@ export function ProfileHeader({
                         YouTube
                         {youtubeVerified && youtubeCount && (
                           <span className="ml-2 text-xs opacity-70">
-                            {youtubeCount >= 1000000
-                              ? `${(youtubeCount / 1000000).toFixed(1)}M`
-                              : youtubeCount >= 1000
-                                ? `${(youtubeCount / 1000).toFixed(0)}K`
-                                : youtubeCount}
+                            {formatCount(youtubeCount)}
                           </span>
                         )}
                       </Button>
@@ -228,11 +235,7 @@ export function ProfileHeader({
                         Instagram
                         {instagramVerified && instagramCount && (
                           <span className="ml-2 text-xs opacity-70">
-                            {instagramCount >= 1000000
-                              ? `${(instagramCount / 1000000).toFixed(1)}M`
-                              : instagramCount >= 1000
-                                ? `${(instagramCount / 1000).toFixed(0)}K`
-                                : instagramCount}
+                            {formatCount(instagramCount)}
                           </span>
                         )}
                       </Button>
@@ -252,17 +255,33 @@ export function ProfileHeader({
                     )}
                   </Tooltip>
                 )}
-                {socialLinks?.linkedin && (
-                  <Button variant="outline" onClick={() => openLink(socialLinks.linkedin)} data-testid="button-linkedin">
-                    <SiLinkedin className="w-4 h-4 mr-2" />
-                    LinkedIn
-                  </Button>
-                )}
-                {socialLinks?.twitter && (
-                  <Button variant="outline" onClick={() => openLink(socialLinks.twitter)} data-testid="button-twitter">
-                    <SiX className="w-4 h-4 mr-2" />
-                    Twitter/X
-                  </Button>
+                {facebookUrl && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" onClick={() => openLink(facebookUrl)} data-testid="button-facebook">
+                        <SiFacebook className="w-4 h-4 mr-2" />
+                        Facebook
+                        {facebookVerified && facebookCount && (
+                          <span className="ml-2 text-xs opacity-70">
+                            {formatCount(facebookCount)}
+                          </span>
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    {facebookVerified && facebookLastUpdated && (
+                      <TooltipContent>
+                        <div className="text-xs">
+                          <div className="flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-green-500" />
+                            Verified
+                          </div>
+                          <div className="text-muted-foreground mt-1">
+                            Last updated: {formatDate(facebookLastUpdated)}
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
                 )}
               </div>
             </div>
