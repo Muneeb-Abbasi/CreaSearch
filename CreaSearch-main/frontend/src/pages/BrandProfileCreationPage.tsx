@@ -420,14 +420,37 @@ export default function BrandProfileCreationPage() {
         profile_completion: calculateCompletion(),
       };
 
+      let profileId = existingProfile?.id;
+
       // If a rejected profile exists, update it instead of creating a new one
       if (existingProfile && existingProfile.status === 'rejected') {
         await profileApi.update(existingProfile.id, profilePayload);
       } else {
-        await profileApi.create({
+        const createdProfile = await profileApi.create({
           user_id: user?.id,
           ...profilePayload,
         });
+        profileId = createdProfile.id;
+      }
+
+      // Queue Instagram verification if provided
+      if (formData.instagram && profileId) {
+        try {
+          const { verificationApi } = await import("@/lib/api");
+          await verificationApi.verifyInstagram(formData.instagram, profileId);
+        } catch (igError) {
+          console.error("Instagram queue failed:", igError);
+        }
+      }
+
+      // Queue Facebook verification if provided
+      if (formData.facebook && profileId) {
+        try {
+          const { verificationApi } = await import("@/lib/api");
+          await verificationApi.verifyFacebook(formData.facebook, profileId);
+        } catch (fbError) {
+          console.error("Facebook queue failed:", fbError);
+        }
       }
 
       toast({

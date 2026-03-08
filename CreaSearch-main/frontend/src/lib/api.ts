@@ -370,6 +370,15 @@ export interface InstagramVerificationResult {
     error?: string;
 }
 
+export interface FacebookVerificationResult {
+    success: boolean;
+    url: string | null;
+    pageName: string | null;
+    followers: number | null;
+    status: 'VALIDATED' | 'FAILED' | 'PENDING';
+    error?: string;
+}
+
 export interface VerificationStatus {
     youtube: {
         status: string;
@@ -377,6 +386,11 @@ export interface VerificationStatus {
         lastUpdated: string;
     } | null;
     instagram: {
+        status: string;
+        followers: number | null;
+        lastUpdated: string;
+    } | null;
+    facebook: {
         status: string;
         followers: number | null;
         lastUpdated: string;
@@ -395,6 +409,14 @@ export const verificationApi = {
     // Queue Instagram verification (background processing)
     async verifyInstagram(profileUrl: string, profileId?: string): Promise<InstagramVerificationResult> {
         return fetchWithError<InstagramVerificationResult>(`${API_BASE}/verify/instagram`, {
+            method: 'POST',
+            body: JSON.stringify({ profileUrl, profileId }),
+        });
+    },
+
+    // Queue Facebook verification (background processing)
+    async verifyFacebook(profileUrl: string, profileId?: string): Promise<FacebookVerificationResult> {
+        return fetchWithError<FacebookVerificationResult>(`${API_BASE}/verify/facebook`, {
             method: 'POST',
             body: JSON.stringify({ profileUrl, profileId }),
         });
@@ -548,12 +570,19 @@ export interface Collaboration {
     id: string;
     requester_profile_id: string;
     partner_profile_id: string | null;
+    title: string | null;
+    campaign_name: string | null;
+    date_range: string | null;
     description: string;
     proof_url: string | null;
-    status: 'pending' | 'approved' | 'rejected';
+    proof_urls: string[];
+    status: 'pending_confirmation' | 'pending_admin' | 'approved' | 'rejected';
     admin_notes: string | null;
     approved_by: string | null;
     approved_at: string | null;
+    partner_confirmed: boolean;
+    partner_confirmed_at: string | null;
+    requester_confirmed: boolean;
     created_at: string;
     updated_at: string;
     // External collaboration fields
@@ -566,8 +595,12 @@ export const collaborationApi = {
     async create(data: {
         requester_profile_id: string;
         partner_profile_id?: string;
+        title?: string;
+        campaign_name?: string;
+        date_range?: string;
         description: string;
         proof_url?: string;
+        proof_urls?: string[];
         is_external?: boolean;
         external_partner_name?: string;
         external_partner_url?: string;
@@ -578,12 +611,36 @@ export const collaborationApi = {
         });
     },
 
+    async getMyCollaborations(): Promise<Collaboration[]> {
+        return fetchWithError<Collaboration[]>(`${API_BASE}/collaborations/my`);
+    },
+
+    async getPendingConfirmation(): Promise<Collaboration[]> {
+        return fetchWithError<Collaboration[]>(`${API_BASE}/collaborations/pending-confirmation`);
+    },
+
     async getByProfileId(profileId: string): Promise<Collaboration[]> {
         return fetchWithError<Collaboration[]>(`${API_BASE}/collaborations/profile/${profileId}`);
     },
 
+    async confirm(id: string): Promise<Collaboration> {
+        return fetchWithError<Collaboration>(`${API_BASE}/collaborations/${id}/confirm`, {
+            method: 'PUT',
+        });
+    },
+
+    async rejectByPartner(id: string): Promise<Collaboration> {
+        return fetchWithError<Collaboration>(`${API_BASE}/collaborations/${id}/reject-partner`, {
+            method: 'PUT',
+        });
+    },
+
     async getPending(): Promise<Collaboration[]> {
         return fetchWithError<Collaboration[]>(`${API_BASE}/admin/collaborations/pending`);
+    },
+
+    async getAll(): Promise<Collaboration[]> {
+        return fetchWithError<Collaboration[]>(`${API_BASE}/admin/collaborations`);
     },
 
     async approve(id: string, adminNotes?: string): Promise<Collaboration> {
@@ -604,8 +661,12 @@ export const collaborationApi = {
     async adminCreate(data: {
         requester_profile_id: string;
         partner_profile_id?: string;
+        title?: string;
+        campaign_name?: string;
+        date_range?: string;
         description: string;
         proof_url?: string;
+        proof_urls?: string[];
         is_external?: boolean;
         external_partner_name?: string;
         external_partner_url?: string;

@@ -1,0 +1,96 @@
+
+You are a senior software architect. Your task is to analyze an existing code repository and produce a **complete technical implementation plan** for a **Collaboration Verification System**, including backend architecture, data models, APIs, workflows, and UI components.
+
+First, analyze the repository structure, existing models, APIs, authentication logic, and frontend architecture. Then design a plan that integrates this feature cleanly into the existing system with minimal disruption.
+
+The platform allows **creators and brands to create profiles and collaborate with each other**. The goal of this system is to track **verified collaborations** and display a **collaboration count** on user profiles. Only verified collaborations should increase this count.
+
+When a collaboration is completed, either participant can submit a **collaboration approval request**. During submission, the user must provide **proof of the collaboration**, such as a YouTube link, Google Drive link, LinkedIn post, campaign URL, or any other verifiable link showing that the collaboration actually happened. Proof is mandatory for every request.
+
+If both participants are **platform users** (for example creator–brand or creator–creator), the following process must happen:
+
+* Either user can initiate a collaboration request.
+* When the request is created, the second user must confirm whether the collaboration actually occurred.
+* Until both users confirm, the request remains in a **pending confirmation** state.
+* The admin cannot approve a collaboration if only one participant has confirmed it.
+* Once both participants confirm, the request moves to **admin review**.
+
+The **admin is the final authority**. The admin reviews the request details and the submitted proof before making a decision.
+
+If the admin **approves** the collaboration:
+
+* The collaboration becomes visible publicly on the platform.
+* The collaboration count increases for the relevant users.
+* The collaboration appears in their collaboration history.
+
+If the admin **rejects** the collaboration:
+
+* It does not affect collaboration counts.
+* The request remains stored as rejected.
+
+If a platform user collaborates with **someone who is not registered on the platform**, the process changes slightly:
+
+* Only one user submission is required.
+* The user must still provide proof of collaboration.
+* The request goes directly to the admin for verification.
+* If approved, only the registered user’s collaboration count increases.
+
+The system must also prevent **duplicate collaboration submissions**. A collaboration between the same parties for the same campaign or project should not be approved more than once.
+
+Additionally:
+
+* Approved collaborations should be **immutable** to protect data integrity.
+* Only **approved collaborations** should be visible publicly.
+* All submissions must include proof links.
+* The system should support admin review and moderation.
+
+You must also design the **UI and user workflow** for this system.
+
+The UI should include:
+
+User-facing components:
+
+* A **Submit Collaboration Request page** where users enter:
+
+  * collaboration partner
+  * collaboration title or campaign name
+  * date or time period
+  * proof link(s)
+  * optional description
+* A **Pending Collaborations page** showing:
+
+  * requests awaiting confirmation
+  * requests awaiting admin review
+  * rejected requests
+* A **Collaboration History section** on the user profile showing only approved collaborations
+* A **confirmation interface** where the second user can confirm or reject a collaboration request
+
+Admin-facing components:
+
+* An **Admin Collaboration Dashboard** showing:
+
+  * pending confirmations
+  * pending admin approvals
+  * approved collaborations
+  * rejected collaborations
+* An **Admin review page** where admins can:
+
+  * view collaboration details
+  * open proof links
+  * approve or reject requests
+
+Your task is to:
+
+1. Analyze the existing repository and determine where this system should integrate.
+2. Propose the required data models and relationships.
+3. Define the collaboration workflow and state transitions.
+4. Design backend services and validation logic.
+5. Define API endpoints needed for submission, confirmation, admin review, and history retrieval.
+6. Propose necessary database schema changes and migrations.
+7. Design the frontend UI structure and user flows.
+8. Describe admin moderation tools and workflows.
+9. Explain how to prevent fraud and duplicate collaboration submissions.
+10. Propose how collaboration counts should be updated safely and consistently.
+11. Provide a step-by-step implementation roadmap that developers can follow.
+
+Focus on creating a **clear, structured implementation plan** that covers backend logic, UI design, data flow, and system integrity.

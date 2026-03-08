@@ -1,6 +1,7 @@
 import { getSupabaseClient } from './database';
 import { verifyYouTubeChannel } from './youtube';
 import { verifyInstagramProfile } from './instagram';
+import { verifyFacebookProfile } from './facebook';
 import { socialAccountService, scoringService } from './database';
 import { logger } from '../utils/logger';
 
@@ -14,7 +15,7 @@ const RETRY_DELAYS = [
 export interface VerificationQueueItem {
     id: string;
     profile_id: string;
-    platform: 'youtube' | 'instagram';
+    platform: 'youtube' | 'instagram' | 'facebook';
     platform_url: string;
     task_type: 'initial' | 'refresh' | 'retry';
     status: 'queued' | 'processing' | 'completed' | 'failed' | 'exhausted';
@@ -33,7 +34,7 @@ export const verificationQueueService = {
      */
     async enqueue(
         profileId: string,
-        platform: 'youtube' | 'instagram',
+        platform: 'youtube' | 'instagram' | 'facebook',
         platformUrl: string,
         taskType: 'initial' | 'refresh' | 'retry' = 'initial'
     ): Promise<VerificationQueueItem> {
@@ -182,6 +183,20 @@ export const verificationQueueService = {
                     success = true;
                 } else {
                     throw new Error(result.error || `Instagram verification failed: ${result.status}`);
+                }
+            } else if (task.platform === 'facebook') {
+                const result = await verifyFacebookProfile(task.platform_url);
+
+                if (result.status === 'VALIDATED') {
+                    await socialAccountService.updateVerification(task.profile_id, 'facebook', {
+                        verification_status: 'verified',
+                        follower_count: result.followers || 0,
+                        platform_username: result.pageName || null,
+                        verified_at: new Date().toISOString(),
+                    });
+                    success = true;
+                } else {
+                    throw new Error(result.error || `Facebook verification failed: ${result.status}`);
                 }
             }
 

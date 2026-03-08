@@ -69,6 +69,7 @@ export default function ProfileCreationPage() {
     videoIntroUrl: "",
     youtube: "",
     instagram: "",
+    facebook: "",
     linkedin: "",
     twitter: "",
     agreedToTerms: false,
@@ -250,6 +251,7 @@ export default function ProfileCreationPage() {
     const socialCount = [
       formData.youtube,
       formData.instagram,
+      formData.facebook,
       formData.linkedin,
       formData.twitter
     ].filter(url => url && url.trim().length > 0).length;
@@ -354,6 +356,7 @@ export default function ProfileCreationPage() {
       const socialLinks: Record<string, any> = {};
       if (formData.youtube) socialLinks.youtube = { url: formData.youtube, status: 'PENDING' };
       if (formData.instagram) socialLinks.instagram = { url: formData.instagram, status: 'PENDING' };
+      if (formData.facebook) socialLinks.facebook = { url: formData.facebook, status: 'PENDING' };
       if (formData.linkedin) socialLinks.linkedin = formData.linkedin;
       if (formData.twitter) socialLinks.twitter = formData.twitter;
 
@@ -399,7 +402,7 @@ export default function ProfileCreationPage() {
         video_intro_url: formData.videoIntroUrl || null,
         social_links: socialLinks,
         role: 'creator',
-        status: 'pending',
+        status: 'pending' as const,
         profile_completion: calculateCompletion(),
       };
 
@@ -456,6 +459,21 @@ export default function ProfileCreationPage() {
         }
       }
 
+      // Queue Facebook verification if provided (background processing)
+      if (formData.facebook && createdProfile.id) {
+        try {
+          const { verificationApi } = await import("@/lib/api");
+          await verificationApi.verifyFacebook(formData.facebook, createdProfile.id);
+          toast({
+            title: "Facebook Queued",
+            description: "Your Facebook will be verified within 24 hours.",
+          });
+        } catch (fbError) {
+          console.error("Facebook queue failed:", fbError);
+          // Don't block profile creation
+        }
+      }
+
       toast({
         title: "Profile submitted!",
         description: "Your profile is pending review. We'll notify you once approved.",
@@ -484,7 +502,7 @@ export default function ProfileCreationPage() {
     if (formData.phone) score += 10;
     if (formData.bio) score += 15;
     if (formData.collaborationTypes.length > 0) score += 10;
-    if (formData.youtube || formData.instagram || formData.linkedin || formData.twitter) score += 15;
+    if (formData.youtube || formData.instagram || formData.facebook || formData.linkedin || formData.twitter) score += 15;
     return score;
   };
 
@@ -556,6 +574,7 @@ export default function ProfileCreationPage() {
                       // Pre-fill form with existing data for editing
                       const ytLink = existingProfile.social_links?.youtube;
                       const igLink = existingProfile.social_links?.instagram;
+                      const fbLink = existingProfile.social_links?.facebook;
                       setFormData({
                         name: existingProfile.name,
                         title: existingProfile.title || "",
@@ -569,6 +588,7 @@ export default function ProfileCreationPage() {
                         videoIntroUrl: existingProfile.video_intro_url || "",
                         youtube: typeof ytLink === 'object' ? ytLink?.url || "" : ytLink || "",
                         instagram: typeof igLink === 'object' ? igLink?.url || "" : igLink || "",
+                        facebook: typeof fbLink === 'object' ? fbLink?.url || "" : fbLink || "",
                         linkedin: existingProfile.social_links?.linkedin || "",
                         twitter: existingProfile.social_links?.twitter || "",
                         agreedToTerms: false,

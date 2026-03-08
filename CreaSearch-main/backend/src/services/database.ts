@@ -959,12 +959,19 @@ export interface Collaboration {
     id: string;
     requester_profile_id: string;
     partner_profile_id: string | null;
+    title: string | null;
+    campaign_name: string | null;
+    date_range: string | null;
     description: string;
     proof_url: string | null;
-    status: 'pending' | 'approved' | 'rejected';
+    proof_urls: string[];
+    status: 'pending_confirmation' | 'pending_admin' | 'approved' | 'rejected';
     admin_notes: string | null;
     approved_by: string | null;
     approved_at: string | null;
+    partner_confirmed: boolean;
+    partner_confirmed_at: string | null;
+    requester_confirmed: boolean;
     created_at: string;
     updated_at: string;
     // External collaboration fields
@@ -974,7 +981,7 @@ export interface Collaboration {
 }
 
 export const collaborationService = {
-    async create(collab: Omit<Collaboration, 'id' | 'status' | 'admin_notes' | 'approved_by' | 'approved_at' | 'created_at' | 'updated_at'>): Promise<Collaboration> {
+    async create(collab: Omit<Collaboration, 'id' | 'status' | 'admin_notes' | 'approved_by' | 'approved_at' | 'partner_confirmed' | 'partner_confirmed_at' | 'requester_confirmed' | 'created_at' | 'updated_at'>): Promise<Collaboration> {
         // Validation: external collabs must have external_partner_name
         if (collab.is_external && !collab.external_partner_name) {
             throw new Error('External collaborations must include a partner name');
@@ -983,10 +990,19 @@ export const collaborationService = {
         if (!collab.is_external && !collab.partner_profile_id) {
             throw new Error('Internal collaborations must include a partner profile ID');
         }
+
+        // Determine initial status: external goes straight to admin, internal needs partner confirmation
+        const initialStatus = collab.is_external ? 'pending_admin' : 'pending_confirmation';
+
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
             .from('collaborations')
-            .insert(collab)
+            .insert({
+                ...collab,
+                status: initialStatus,
+                requester_confirmed: true,
+                partner_confirmed: false,
+            })
             .select()
             .single();
 
@@ -1018,16 +1034,169 @@ export const collaborationService = {
         return data || [];
     },
 
+    async getByUserId(userId: string): Promise<Collaboration[]> {
+        const supabase = getSupabaseClient();
+        // First get all profile IDs for this user
+        const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('user_id', userId);
+
+        if (profileError) throw profileError;
+        if (!profiles || profiles.length === 0) return [];
+
+        const profileIds = profiles.map(p => p.id);
+        const orFilter = profileIds.map(id => `requester_profile_id.eq.${id},partner_profile_id.eq.${id}`).join(',');
+
+        const { data, error } = await supabase
+            .from('collaborations')
+            .select('*')
+            .or(orFilter)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async getPendingConfirmationForUser(userId: string): Promise<Collaboration[]> {
+        const supabase = getSupabaseClient();
+        // Get profile IDs where user is the partner
+        const { data: profiles, error: profileError } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('user_id', userId);
+
+        if (profileError) throw profileError;
+        if (!profiles || profiles.length === 0) return [];
+
+        const profileIds = profiles.map(p => p.id);
+        const partnerFilter = profileIds.map(id => `partner_profile_id.eq.${id}`).join(',');
+
+        const { data, error } = await supabase
+            .from('collaborations')
+            .select('*')
+            .eq('status', 'pending_confirmation')
+            .or(partnerFilter)
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
     async getPending(): Promise<Collaboration[]> {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
             .from('collaborations')
             .select('*')
-            .eq('status', 'pending')
+            .eq('status', 'pending_admin')
             .order('created_at', { ascending: false });
 
         if (error) throw error;
         return data || [];
+    },
+
+    async getAll(): Promise<Collaboration[]> {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+            .from('collaborations')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        return data || [];
+    },
+
+    async checkDuplicate(requesterProfileId: string, partnerProfileId: string | null, campaignName: string | null): Promise<boolean> {
+        if (!campaignName) return false; // No campaign name = no duplicate check
+        const supabase = getSupabaseClient();
+
+        let query = supabase
+            .from('collaborations')
+            .select('id', { count: 'exact', head: true })
+            .eq('requester_profile_id', requesterProfileId)
+            .eq('campaign_name', campaignName)
+            .neq('status', 'rejected');
+
+        if (partnerProfileId) {
+            query = query.eq('partner_profile_id', partnerProfileId);
+        } else {
+            query = query.is('partner_profile_id', null);
+        }
+
+        const { count, error } = await query;
+        if (error) throw error;
+        return (count || 0) > 0;
+    },
+
+    async confirmByPartner(id: string, partnerUserId: string): Promise<Collaboration> {
+        const supabase = getSupabaseClient();
+
+        const collab = await this.getById(id);
+        if (!collab) throw new Error('Collaboration not found');
+        if (collab.status !== 'pending_confirmation') throw new Error('Collaboration is not pending confirmation');
+
+        // Verify the caller owns the partner profile
+        if (collab.partner_profile_id) {
+            const { data: partnerProfile } = await supabase
+                .from('profiles')
+                .select('user_id')
+                .eq('id', collab.partner_profile_id)
+                .single();
+
+            if (!partnerProfile || partnerProfile.user_id !== partnerUserId) {
+                throw new Error('You are not the partner in this collaboration');
+            }
+        }
+
+        const { data, error } = await supabase
+            .from('collaborations')
+            .update({
+                partner_confirmed: true,
+                partner_confirmed_at: new Date().toISOString(),
+                status: 'pending_admin',
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
+    },
+
+    async rejectByPartner(id: string, partnerUserId: string): Promise<Collaboration> {
+        const supabase = getSupabaseClient();
+
+        const collab = await this.getById(id);
+        if (!collab) throw new Error('Collaboration not found');
+        if (collab.status !== 'pending_confirmation') throw new Error('Collaboration is not pending confirmation');
+
+        // Verify the caller owns the partner profile
+        if (collab.partner_profile_id) {
+            const { data: partnerProfile } = await supabase
+                .from('profiles')
+                .select('user_id')
+                .eq('id', collab.partner_profile_id)
+                .single();
+
+            if (!partnerProfile || partnerProfile.user_id !== partnerUserId) {
+                throw new Error('You are not the partner in this collaboration');
+            }
+        }
+
+        const { data, error } = await supabase
+            .from('collaborations')
+            .update({
+                status: 'rejected',
+                admin_notes: 'Rejected by partner',
+                updated_at: new Date().toISOString(),
+            })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        return data;
     },
 
     async approve(id: string, adminUserId: string, adminNotes?: string): Promise<Collaboration> {
@@ -1036,7 +1205,7 @@ export const collaborationService = {
         // Get the collaboration first
         const collab = await this.getById(id);
         if (!collab) throw new Error('Collaboration not found');
-        if (collab.status !== 'pending') throw new Error('Collaboration is not pending');
+        if (collab.status !== 'pending_admin') throw new Error('Collaboration is not pending admin review');
 
         // Update collaboration status
         const { data, error } = await supabase
@@ -1069,7 +1238,9 @@ export const collaborationService = {
 
         const collab = await this.getById(id);
         if (!collab) throw new Error('Collaboration not found');
-        if (collab.status !== 'pending') throw new Error('Collaboration is not pending');
+        if (collab.status !== 'pending_admin' && collab.status !== 'pending_confirmation') {
+            throw new Error('Collaboration cannot be rejected in its current state');
+        }
 
         const { data, error } = await supabase
             .from('collaborations')

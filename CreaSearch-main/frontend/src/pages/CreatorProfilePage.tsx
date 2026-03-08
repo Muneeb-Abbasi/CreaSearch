@@ -37,10 +37,9 @@ export default function CreatorProfilePage() {
   const [userProfile, setUserProfile] = useState<Profile | null>(null);
   const [collabForm, setCollabForm] = useState({
     description: '',
-    proof_url: '',
-    is_external: false,
-    external_partner_name: '',
-    external_partner_url: '',
+    proof_urls: [''],
+    title: '',
+    campaign_name: '',
   });
 
   useEffect(() => {
@@ -129,22 +128,21 @@ export default function CreatorProfilePage() {
   const handleCollabSubmit = async () => {
     if (!profile?.id || !userProfile?.id) return;
     if (!collabForm.description.trim()) return;
-    if (collabForm.is_external && !collabForm.external_partner_name.trim()) return;
+    const validProofUrls = collabForm.proof_urls.filter(u => u.trim() !== '');
+    if (validProofUrls.length === 0) return;
 
     setCollabSubmitting(true);
     try {
       await collaborationApi.create({
         requester_profile_id: userProfile.id,
-        partner_profile_id: collabForm.is_external ? undefined : profile.id,
+        partner_profile_id: profile.id,
         description: collabForm.description,
-        proof_url: collabForm.proof_url || undefined,
-        is_external: collabForm.is_external,
-        external_partner_name: collabForm.is_external ? collabForm.external_partner_name : undefined,
-        external_partner_url: collabForm.is_external ? collabForm.external_partner_url : undefined,
+        title: collabForm.title || undefined,
+        campaign_name: collabForm.campaign_name || undefined,
+        proof_urls: validProofUrls,
       });
       setShowCollabForm(false);
-      setCollabForm({ description: '', proof_url: '', is_external: false, external_partner_name: '', external_partner_url: '' });
-      // Show success state - collab is now pending admin review
+      setCollabForm({ description: '', proof_urls: [''], title: '', campaign_name: '' });
     } catch (err) {
       console.error("Error submitting collaboration:", err);
     } finally {
@@ -190,11 +188,11 @@ export default function CreatorProfilePage() {
           location={profile.location || "Pakistan"}
           avatarUrl={profile.avatar_url || creatorImage}
           score={profile.creasearch_score || 80}
-          verified={profile.verified_socials?.length > 0}
+          verified={(profile.verified_socials?.length || 0) > 0}
           followerCount={profile.follower_total || 0}
           completedGigs={profile.gigs_completed || 0}
           tags={profile.collaboration_types || []}
-          socialLinks={profile.social_links as unknown as { youtube?: string; instagram?: string; linkedin?: string; twitter?: string } | undefined}
+          socialLinks={profile.social_links as unknown as { youtube?: string; instagram?: string; facebook?: string; linkedin?: string; twitter?: string } | undefined}
           onInquiryClick={() => setInquiryModalOpen(true)}
         />
 
@@ -278,19 +276,23 @@ export default function CreatorProfilePage() {
                       </CardHeader>
                       <CardContent>
                         <div className="flex flex-wrap gap-2">
-                          {Object.entries(profile.social_links).map(([platform, url]) => (
-                            <a
-                              key={platform}
-                              href={url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex"
-                            >
-                              <Badge variant="secondary" className="capitalize hover:bg-primary hover:text-primary-foreground cursor-pointer">
-                                {platform}
-                              </Badge>
-                            </a>
-                          ))}
+                          {Object.entries(profile.social_links).map(([platform, value]) => {
+                            const url = typeof value === 'string' ? value : (value as any)?.url;
+                            if (!url) return null;
+                            return (
+                              <a
+                                key={platform}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex"
+                              >
+                                <Badge variant="secondary" className="capitalize hover:bg-primary hover:text-primary-foreground cursor-pointer">
+                                  {platform}
+                                </Badge>
+                              </a>
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>
@@ -318,26 +320,68 @@ export default function CreatorProfilePage() {
                           <div className="space-y-4">
                             <h4 className="font-semibold text-sm">Submit Collaboration with {profile.name}</h4>
                             <div>
+                              <label className="text-sm font-medium">Title</label>
+                              <input
+                                className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                                placeholder="e.g. Product Review Video"
+                                value={collabForm.title}
+                                onChange={(e) => setCollabForm(prev => ({ ...prev, title: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-sm font-medium">Campaign / Project Name</label>
+                              <input
+                                className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                                placeholder="e.g. Summer 2026 Campaign"
+                                value={collabForm.campaign_name}
+                                onChange={(e) => setCollabForm(prev => ({ ...prev, campaign_name: e.target.value }))}
+                              />
+                            </div>
+                            <div>
                               <label className="text-sm font-medium">Description *</label>
                               <textarea
                                 className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
                                 rows={3}
-                                placeholder="Describe your collaboration (e.g., joint video, brand campaign, event)..."
+                                placeholder="Describe your collaboration..."
                                 value={collabForm.description}
                                 onChange={(e) => setCollabForm(prev => ({ ...prev, description: e.target.value }))}
                               />
                             </div>
                             <div>
-                              <label className="text-sm font-medium">Proof URL (optional)</label>
-                              <input
-                                className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
-                                placeholder="Link to proof (screenshot, post, video)"
-                                value={collabForm.proof_url}
-                                onChange={(e) => setCollabForm(prev => ({ ...prev, proof_url: e.target.value }))}
-                              />
+                              <label className="text-sm font-medium">Proof Links * (at least one required)</label>
+                              {collabForm.proof_urls.map((url, index) => (
+                                <div key={index} className="flex gap-2 mt-1">
+                                  <input
+                                    className="flex-1 border rounded-md p-2 text-sm bg-background"
+                                    placeholder="https://..."
+                                    value={url}
+                                    onChange={(e) => {
+                                      const updated = [...collabForm.proof_urls];
+                                      updated[index] = e.target.value;
+                                      setCollabForm(prev => ({ ...prev, proof_urls: updated }));
+                                    }}
+                                  />
+                                  {collabForm.proof_urls.length > 1 && (
+                                    <Button size="sm" variant="ghost" onClick={() => {
+                                      setCollabForm(prev => ({
+                                        ...prev,
+                                        proof_urls: prev.proof_urls.filter((_, i) => i !== index),
+                                      }));
+                                    }}>✕</Button>
+                                  )}
+                                </div>
+                              ))}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="mt-2"
+                                onClick={() => setCollabForm(prev => ({ ...prev, proof_urls: [...prev.proof_urls, ''] }))}
+                              >
+                                + Add Link
+                              </Button>
                             </div>
                             <div className="flex gap-2">
-                              <Button size="sm" onClick={handleCollabSubmit} disabled={collabSubmitting || !collabForm.description.trim()}>
+                              <Button size="sm" onClick={handleCollabSubmit} disabled={collabSubmitting || !collabForm.description.trim() || !collabForm.proof_urls.some(u => u.trim())}>
                                 {collabSubmitting ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <CheckCircle2 className="w-4 h-4 mr-1" />}
                                 Submit for Review
                               </Button>
@@ -345,7 +389,7 @@ export default function CreatorProfilePage() {
                                 Cancel
                               </Button>
                             </div>
-                            <p className="text-xs text-muted-foreground">Your submission will be reviewed by an admin before counting.</p>
+                            <p className="text-xs text-muted-foreground">Your partner will need to confirm, then an admin will review before it counts.</p>
                           </div>
                         )}
                       </CardContent>
@@ -368,21 +412,38 @@ export default function CreatorProfilePage() {
                         <Card key={collab.id}>
                           <CardContent className="pt-6">
                             <div className="flex items-start justify-between">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
+                              <div className="space-y-1 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
                                   <Handshake className="w-4 h-4 text-green-600" />
                                   <span className="font-medium text-sm">
-                                    {collab.is_external
-                                      ? collab.external_partner_name
-                                      : (collab.requester_profile_id === profile?.id ? 'Partner' : profile?.name)}
+                                    {collab.title || collab.description.slice(0, 50)}
                                   </span>
                                   {collab.is_external && (
                                     <Badge variant="outline" className="text-xs">External</Badge>
                                   )}
                                 </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Partner: <strong>
+                                    {collab.is_external
+                                      ? collab.external_partner_name
+                                      : (collab.requester_profile_id === profile?.id ? 'Partner' : profile?.name)}
+                                  </strong>
+                                  {collab.campaign_name && <> · Campaign: <strong>{collab.campaign_name}</strong></>}
+                                  {collab.date_range && <> · {collab.date_range}</>}
+                                </p>
                                 <p className="text-sm text-muted-foreground">{collab.description}</p>
+                                {/* Proof links */}
+                                {(collab.proof_urls?.length > 0 || collab.proof_url) && (
+                                  <div className="flex flex-wrap gap-2 mt-1">
+                                    {(collab.proof_urls?.length > 0 ? collab.proof_urls : [collab.proof_url]).filter(Boolean).map((url, i) => (
+                                      <a key={i} href={url!} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                                        Proof {i + 1} ↗
+                                      </a>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
                                 <Badge variant="default" className="bg-green-500 text-xs">Verified</Badge>
                                 {collab.external_partner_url && (
                                   <a href={collab.external_partner_url} target="_blank" rel="noopener noreferrer">
@@ -391,11 +452,6 @@ export default function CreatorProfilePage() {
                                 )}
                               </div>
                             </div>
-                            {collab.proof_url && (
-                              <a href={collab.proof_url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 underline mt-2 inline-block">
-                                View Proof
-                              </a>
-                            )}
                           </CardContent>
                         </Card>
                       ))}
@@ -443,6 +499,10 @@ export default function CreatorProfilePage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Completed Gigs</span>
                     <span className="font-semibold">{profile.gigs_completed || 0}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Verified Collaborations</span>
+                    <span className="font-semibold">{collaborations.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Profile Completion</span>

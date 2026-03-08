@@ -110,6 +110,11 @@ export function Header() {
                       My Profile
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/collaborations" className="cursor-pointer">
+                      My Collaborations
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive">
                     <LogOut className="mr-2 h-4 w-4" />
@@ -166,6 +171,11 @@ export function Header() {
                       <Button variant="ghost" className="w-full justify-start">
                         <User className="mr-2 h-4 w-4" />
                         My Profile
+                      </Button>
+                    </Link>
+                    <Link href="/collaborations">
+                      <Button variant="ghost" className="w-full justify-start">
+                        My Collaborations
                       </Button>
                     </Link>
                     <Button variant="ghost" className="w-full justify-start text-destructive" onClick={handleSignOut}>

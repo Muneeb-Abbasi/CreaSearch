@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Users, CheckCircle2, XCircle, Clock, TrendingUp, DollarSign, Loader2, RefreshCw, Trash2, Eye, AlertCircle, Star, ScrollText, Handshake } from "lucide-react";
-import { SiYoutube, SiInstagram } from "react-icons/si";
+import { SiYoutube, SiInstagram, SiFacebook } from "react-icons/si";
 import { useAuth } from "@/contexts/AuthContext";
 import { adminApi, profileApi, featuredProfileApi, collaborationApi, Profile, type AdminActionLog, type Collaboration } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -15,7 +15,7 @@ import { ProfileDetailModal } from "@/components/ProfileDetailModal";
 import { AdminCategoriesTab } from "@/components/AdminCategoriesTab";
 
 // Helper to get verification status badge
-function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Record<string, any>) {
+function getVerificationBadge(platform: 'youtube' | 'instagram' | 'facebook', socialLinks: Record<string, any>) {
   const link = socialLinks?.[platform];
   if (!link) return null;
 
@@ -25,7 +25,7 @@ function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Re
   if (status === 'VERIFIED' || status === 'VALIDATED') {
     return (
       <Badge variant="default" className="bg-green-500 text-xs">
-        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : platform === 'instagram' ? <SiInstagram className="w-3 h-3 mr-1" /> : <SiFacebook className="w-3 h-3 mr-1" />}
         {count ? `${count >= 1000 ? `${(count / 1000).toFixed(0)}K` : count}` : '✓'}
       </Badge>
     );
@@ -33,7 +33,7 @@ function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Re
   if (status === 'PENDING') {
     return (
       <Badge variant="secondary" className="text-xs">
-        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : platform === 'instagram' ? <SiInstagram className="w-3 h-3 mr-1" /> : <SiFacebook className="w-3 h-3 mr-1" />}
         Pending
       </Badge>
     );
@@ -41,7 +41,7 @@ function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Re
   if (status === 'HIDDEN' || status === 'PRIVATE') {
     return (
       <Badge variant="outline" className="text-xs">
-        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : platform === 'instagram' ? <SiInstagram className="w-3 h-3 mr-1" /> : <SiFacebook className="w-3 h-3 mr-1" />}
         Hidden
       </Badge>
     );
@@ -49,7 +49,7 @@ function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Re
   if (status === 'FAILED' || status === 'NOT_FOUND') {
     return (
       <Badge variant="destructive" className="text-xs">
-        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+        {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : platform === 'instagram' ? <SiInstagram className="w-3 h-3 mr-1" /> : <SiFacebook className="w-3 h-3 mr-1" />}
         Failed
       </Badge>
     );
@@ -57,7 +57,7 @@ function getVerificationBadge(platform: 'youtube' | 'instagram', socialLinks: Re
   // Has link but no status (legacy)
   return (
     <Badge variant="outline" className="text-xs">
-      {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : <SiInstagram className="w-3 h-3 mr-1" />}
+      {platform === 'youtube' ? <SiYoutube className="w-3 h-3 mr-1" /> : platform === 'instagram' ? <SiInstagram className="w-3 h-3 mr-1" /> : <SiFacebook className="w-3 h-3 mr-1" />}
       Unverified
     </Badge>
   );
@@ -82,12 +82,16 @@ export default function AdminDashboardPage() {
   const [actionLogs, setActionLogs] = useState<AdminActionLog[]>([]);
   const [actionLogLoading, setActionLogLoading] = useState(false);
   const [pendingCollabs, setPendingCollabs] = useState<Collaboration[]>([]);
+  const [allCollabs, setAllCollabs] = useState<Collaboration[]>([]);
   const [collabLoading, setCollabLoading] = useState<string | null>(null);
   const [showAdminCollabForm, setShowAdminCollabForm] = useState(false);
+  const [collabFilter, setCollabFilter] = useState<'all' | 'pending_confirmation' | 'pending_admin' | 'approved' | 'rejected'>('all');
   const [adminCollabForm, setAdminCollabForm] = useState({
     requester_profile_id: '',
+    title: '',
+    campaign_name: '',
     description: '',
-    proof_url: '',
+    proof_urls: [''],
     is_external: true,
     external_partner_name: '',
     external_partner_url: '',
@@ -211,6 +215,15 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const fetchAllCollabs = async () => {
+    try {
+      const collabs = await collaborationApi.getAll();
+      setAllCollabs(collabs);
+    } catch {
+      // non-critical
+    }
+  };
+
   const handleApproveCollab = async (collabId: string) => {
     setCollabLoading(collabId);
     try {
@@ -246,9 +259,15 @@ export default function AdminDashboardPage() {
       toast({ title: "Error", description: "External partner name is required", variant: "destructive" });
       return;
     }
+    const validProofUrls = adminCollabForm.proof_urls.filter(u => u.trim() !== '');
     setAdminCollabSubmitting(true);
     try {
-      await collaborationApi.adminCreate(adminCollabForm);
+      await collaborationApi.adminCreate({
+        ...adminCollabForm,
+        title: adminCollabForm.title || undefined,
+        campaign_name: adminCollabForm.campaign_name || undefined,
+        proof_urls: validProofUrls.length > 0 ? validProofUrls : undefined,
+      });
       toast({
         title: adminCollabForm.auto_approve ? "Collaboration Created & Approved" : "Collaboration Created",
         description: adminCollabForm.auto_approve
@@ -257,10 +276,11 @@ export default function AdminDashboardPage() {
       });
       setShowAdminCollabForm(false);
       setAdminCollabForm({
-        requester_profile_id: '', description: '', proof_url: '',
+        requester_profile_id: '', title: '', campaign_name: '', description: '', proof_urls: [''],
         is_external: true, external_partner_name: '', external_partner_url: '', auto_approve: true,
       });
       fetchPendingCollabs();
+      fetchAllCollabs();
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Failed to create collaboration", variant: "destructive" });
     } finally {
@@ -419,6 +439,51 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Admin manual Facebook verification
+  const handleVerifyFacebook = async (profileId: string) => {
+    setVerifyLoading(profileId);
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+      const { data: session } = await import('@/lib/supabase').then(m => m.supabase.auth.getSession());
+      const token = session?.session?.access_token;
+
+      const response = await fetch(`${API_BASE}/admin/verify-facebook-now/${profileId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Facebook Verified!",
+          description: `${result.pageName}: ${result.followers?.toLocaleString()} followers`
+        });
+        // Refresh profiles to show updated data
+        fetchPendingProfiles();
+        fetchAllProfiles();
+      } else {
+        toast({
+          title: "Verification Failed",
+          description: result.error || "Could not verify Facebook profile",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error("Error verifying Facebook:", error);
+      toast({
+        title: "Error",
+        description: "Failed to verify Facebook",
+        variant: "destructive"
+      });
+    } finally {
+      setVerifyLoading(null);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -527,7 +592,7 @@ export default function AdminDashboardPage() {
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="users">All Profiles</TabsTrigger>
-                <TabsTrigger value="collaborations" onClick={() => pendingCollabs.length === 0 && fetchPendingCollabs()}>Collaborations</TabsTrigger>
+                <TabsTrigger value="collaborations" onClick={() => { if (pendingCollabs.length === 0) fetchPendingCollabs(); fetchAllCollabs(); }}>Collaborations</TabsTrigger>
                 <TabsTrigger value="action-log" onClick={() => actionLogs.length === 0 && fetchActionLogs()}>Action Log</TabsTrigger>
                 <TabsTrigger value="categories">Categories</TabsTrigger>
               </TabsList>
@@ -593,6 +658,27 @@ export default function AdminDashboardPage() {
                                       <SiInstagram className="w-3 h-3 mr-1" />
                                     )}
                                     Verify IG
+                                  </Button>
+                                )}
+
+                              {/* Verify Facebook Button (if pending or failed) */}
+                              {profile.social_links?.facebook && (
+                                typeof profile.social_links.facebook !== 'string' &&
+                                ['PENDING', 'FAILED', undefined].includes(profile.social_links.facebook.status)
+                              ) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleVerifyFacebook(profile.id)}
+                                    disabled={verifyLoading === profile.id}
+                                    className="text-xs"
+                                  >
+                                    {verifyLoading === profile.id ? (
+                                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                                    ) : (
+                                      <SiFacebook className="w-3 h-3 mr-1" />
+                                    )}
+                                    Verify FB
                                   </Button>
                                 )}
 
@@ -827,6 +913,24 @@ export default function AdminDashboardPage() {
                             />
                           </div>
                           <div>
+                            <label className="text-sm font-medium">Title</label>
+                            <input
+                              className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                              placeholder="e.g. Product Review Video"
+                              value={adminCollabForm.title}
+                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, title: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm font-medium">Campaign Name</label>
+                            <input
+                              className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
+                              placeholder="e.g. Summer 2026 Campaign"
+                              value={adminCollabForm.campaign_name}
+                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, campaign_name: e.target.value }))}
+                            />
+                          </div>
+                          <div>
                             <label className="text-sm font-medium">External Partner URL</label>
                             <input
                               className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
@@ -836,13 +940,37 @@ export default function AdminDashboardPage() {
                             />
                           </div>
                           <div>
-                            <label className="text-sm font-medium">Proof URL</label>
-                            <input
-                              className="w-full mt-1 border rounded-md p-2 text-sm bg-background"
-                              placeholder="Link to screenshot or proof"
-                              value={adminCollabForm.proof_url}
-                              onChange={(e) => setAdminCollabForm(prev => ({ ...prev, proof_url: e.target.value }))}
-                            />
+                            <label className="text-sm font-medium">Proof URLs</label>
+                            {adminCollabForm.proof_urls.map((url, index) => (
+                              <div key={index} className="flex gap-2 mt-1">
+                                <input
+                                  className="flex-1 border rounded-md p-2 text-sm bg-background"
+                                  placeholder="https://..."
+                                  value={url}
+                                  onChange={(e) => {
+                                    const updated = [...adminCollabForm.proof_urls];
+                                    updated[index] = e.target.value;
+                                    setAdminCollabForm(prev => ({ ...prev, proof_urls: updated }));
+                                  }}
+                                />
+                                {adminCollabForm.proof_urls.length > 1 && (
+                                  <Button size="sm" variant="ghost" onClick={() => {
+                                    setAdminCollabForm(prev => ({
+                                      ...prev,
+                                      proof_urls: prev.proof_urls.filter((_, i) => i !== index),
+                                    }));
+                                  }}>✕</Button>
+                                )}
+                              </div>
+                            ))}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-1"
+                              onClick={() => setAdminCollabForm(prev => ({ ...prev, proof_urls: [...prev.proof_urls, ''] }))}
+                            >
+                              + Add Link
+                            </Button>
                           </div>
                         </div>
                         <div>
@@ -889,6 +1017,7 @@ export default function AdminDashboardPage() {
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="text-sm font-medium">
+                                  {collab.title && <strong>{collab.title} — </strong>}
                                   Requester: <span className="text-muted-foreground">{collab.requester_profile_id.slice(0, 8)}...</span>
                                   {" → "}
                                   {collab.is_external ? (
@@ -902,18 +1031,27 @@ export default function AdminDashboardPage() {
                                     <>Partner: <span className="text-muted-foreground">{collab.partner_profile_id?.slice(0, 8)}...</span></>
                                   )}
                                 </p>
-                                <p className="text-xs text-muted-foreground">Submitted {formatDate(collab.created_at)}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  Submitted {formatDate(collab.created_at)}
+                                  {collab.campaign_name && <> · Campaign: <strong>{collab.campaign_name}</strong></>}
+                                  {collab.date_range && <> · {collab.date_range}</>}
+                                </p>
                               </div>
                               <div className="flex items-center gap-2">
                                 {collab.is_external && <Badge variant="outline" className="text-orange-600 border-orange-300">External</Badge>}
-                                <Badge variant="secondary">Pending</Badge>
+                                <Badge variant="secondary">Pending Admin</Badge>
                               </div>
                             </div>
                             <p className="text-sm">{collab.description}</p>
-                            {collab.proof_url && (
-                              <a href={collab.proof_url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-500 underline">
-                                View Proof
-                              </a>
+                            {/* Proof links */}
+                            {(collab.proof_urls?.length > 0 || collab.proof_url) && (
+                              <div className="flex flex-wrap gap-2">
+                                {(collab.proof_urls?.length > 0 ? collab.proof_urls : [collab.proof_url]).filter(Boolean).map((url, i) => (
+                                  <a key={i} href={url!} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-500 underline">
+                                    Proof {i + 1} ↗
+                                  </a>
+                                ))}
+                              </div>
                             )}
                             <div className="flex gap-2">
                               <Button
@@ -938,6 +1076,79 @@ export default function AdminDashboardPage() {
                         ))}
                       </div>
                     )}
+
+                    {/* All Collaborations Section */}
+                    <div className="mt-8 pt-6 border-t">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="font-semibold">All Collaborations ({allCollabs.length})</h4>
+                        <div className="flex gap-1">
+                          {(['all', 'pending_confirmation', 'pending_admin', 'approved', 'rejected'] as const).map(filter => (
+                            <Button
+                              key={filter}
+                              size="sm"
+                              variant={collabFilter === filter ? 'default' : 'outline'}
+                              onClick={() => setCollabFilter(filter)}
+                              className="text-xs"
+                            >
+                              {filter === 'all' ? 'All' : filter === 'pending_confirmation' ? 'Awaiting Confirm' : filter === 'pending_admin' ? 'Pending Admin' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                      {allCollabs
+                        .filter(c => collabFilter === 'all' || c.status === collabFilter)
+                        .length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-4">No collaborations found.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {allCollabs
+                            .filter(c => collabFilter === 'all' || c.status === collabFilter)
+                            .map(collab => (
+                              <div key={collab.id} className="p-3 border rounded-md flex items-center justify-between">
+                                <div className="space-y-1 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-sm font-medium">{collab.title || collab.description.slice(0, 40)}</span>
+                                    <Badge
+                                      variant={collab.status === 'approved' ? 'default' : collab.status === 'rejected' ? 'destructive' : 'secondary'}
+                                      className={`text-xs ${collab.status === 'approved' ? 'bg-green-500' : ''}`}
+                                    >
+                                      {collab.status.replace('_', ' ')}
+                                    </Badge>
+                                    {collab.is_external && <Badge variant="outline" className="text-xs">External</Badge>}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    {collab.requester_profile_id.slice(0, 8)}...
+                                    {collab.is_external ? ` → ${collab.external_partner_name}` : ` → ${collab.partner_profile_id?.slice(0, 8)}...`}
+                                    {collab.campaign_name && <> · {collab.campaign_name}</>}
+                                    {" · "}{formatDate(collab.created_at)}
+                                  </p>
+                                </div>
+                                <div className="flex gap-2 shrink-0">
+                                  {(collab.proof_urls?.length > 0 || collab.proof_url) && (
+                                    <a
+                                      href={(collab.proof_urls?.length > 0 ? collab.proof_urls[0] : collab.proof_url) || '#'}
+                                      target="_blank" rel="noopener noreferrer"
+                                      className="text-xs text-blue-500 underline"
+                                    >
+                                      Proof
+                                    </a>
+                                  )}
+                                  {collab.status === 'pending_admin' && (
+                                    <>
+                                      <Button size="sm" variant="outline" onClick={() => handleApproveCollab(collab.id)} disabled={collabLoading === collab.id}>
+                                        <CheckCircle2 className="w-3 h-3" />
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleRejectCollab(collab.id)} disabled={collabLoading === collab.id}>
+                                        <XCircle className="w-3 h-3" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               </TabsContent>

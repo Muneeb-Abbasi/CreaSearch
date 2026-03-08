@@ -490,6 +490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const youtubeAccount = accounts.find(a => a.platform === 'youtube');
       const instagramAccount = accounts.find(a => a.platform === 'instagram');
+      const facebookAccount = accounts.find(a => a.platform === 'facebook');
 
       const verifications = {
         youtube: youtubeAccount?.verification_status !== 'unverified' ? {
@@ -501,6 +502,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: instagramAccount?.verification_status === 'verified' ? 'VALIDATED' : instagramAccount?.verification_status?.toUpperCase(),
           followers: instagramAccount?.follower_count || null,
           lastUpdated: instagramAccount?.last_refreshed_at || instagramAccount?.verified_at
+        } : null,
+        facebook: facebookAccount?.verification_status !== 'unverified' ? {
+          status: facebookAccount?.verification_status === 'verified' ? 'VALIDATED' : facebookAccount?.verification_status?.toUpperCase(),
+          followers: facebookAccount?.follower_count || null,
+          lastUpdated: facebookAccount?.last_refreshed_at || facebookAccount?.verified_at
         } : null
       };
 
@@ -589,6 +595,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST /api/verify/facebook - Queue Facebook verification (background processing)
+  app.post("/api/verify/facebook", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
+    try {
+      const { profileUrl, profileId, immediate } = req.body;
+
+      if (!profileUrl) {
+        return res.status(400).json({ error: "profileUrl is required" });
+      }
+
+      // Dynamic import
+      const { verifyFacebookProfile, queueFacebookVerification } =
+        await import("./services/facebook");
+
+      // If immediate verification is requested
+      if (immediate) {
+        const result = await verifyFacebookProfile(profileUrl);
+
+        if (profileId && result.status === 'VALIDATED') {
+          await socialAccountService.upsert(profileId, {
+            platform: 'facebook',
+            platform_url: profileUrl,
+            platform_username: result.pageName,
+            display_name: result.pageName,
+            follower_count: result.followers || 0,
+            verification_status: 'verified',
+            verified_at: new Date().toISOString(),
+            raw_data: {
+              username: result.pageName,
+              followers: result.followers,
+              status: result.status,
+              lastUpdated: new Date().toISOString()
+            }
+          });
+        }
+
+        return res.json({
+          success: result.status === 'VALIDATED',
+          ...result
+        });
+      }
+
+      // Default: Queue for background processing
+      if (profileId) {
+        await socialAccountService.upsert(profileId, {
+          platform: 'facebook',
+          platform_url: profileUrl,
+          verification_status: 'pending',
+          raw_data: {
+            queuedAt: new Date().toISOString()
+          }
+        });
+      }
+
+      const queueResult = await queueFacebookVerification(profileId || '', profileUrl);
+
+      res.json({
+        success: true,
+        queued: queueResult.queued,
+        message: queueResult.message,
+        url: profileUrl,
+        status: 'PENDING'
+      });
+    } catch (error) {
+      logger.error("Error processing Facebook verification:", error);
+      res.status(500).json({ error: "Failed to process Facebook verification" });
+    }
+  });
+
   // POST /api/admin/verify-instagram-now/:id - Admin: Force immediate Instagram verification
   app.post("/api/admin/verify-instagram-now/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
@@ -632,6 +706,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error verifying Instagram:", error);
       res.status(500).json({ error: "Failed to verify Instagram" });
+    }
+  });
+
+  // POST /api/admin/verify-facebook-now/:id - Admin: Force immediate Facebook verification
+  app.post("/api/admin/verify-facebook-now/:id", requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const accounts = await socialAccountService.getByProfileId(req.params.id);
+      const facebookAccount = accounts.find(a => a.platform === 'facebook');
+
+      if (!facebookAccount) {
+        return res.status(400).json({ error: "Profile has no Facebook link" });
+      }
+
+      const facebookUrl = facebookAccount.platform_url;
+
+      const { verifyFacebookProfile } = await import("./services/facebook");
+      const result = await verifyFacebookProfile(facebookUrl);
+
+      if (result.status === 'VALIDATED') {
+        await socialAccountService.updateVerification(req.params.id, 'facebook', {
+          platform_username: result.pageName,
+          display_name: result.pageName,
+          follower_count: result.followers || 0,
+          verification_status: 'verified',
+          verified_at: new Date().toISOString(),
+          raw_data: {
+            username: result.pageName,
+            followers: result.followers,
+            status: result.status,
+            pageName: result.pageName,
+            lastUpdated: new Date().toISOString()
+          }
+        });
+      }
+
+      res.json({
+        success: result.status === 'VALIDATED',
+        ...result
+      });
+    } catch (error) {
+      logger.error("Error verifying Facebook:", error);
+      res.status(500).json({ error: "Failed to verify Facebook" });
     }
   });
 
@@ -981,10 +1097,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/collaborations - Submit a collaboration request
   app.post("/api/collaborations", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
     try {
-      const { requester_profile_id, partner_profile_id, description, proof_url, is_external, external_partner_name, external_partner_url } = req.body;
+      const {
+        requester_profile_id, partner_profile_id, title, campaign_name,
+        date_range, description, proof_url, proof_urls,
+        is_external, external_partner_name, external_partner_url
+      } = req.body;
 
       if (!requester_profile_id || !description) {
         return res.status(400).json({ error: "Missing required fields: requester_profile_id, description" });
+      }
+
+      // Proof is mandatory
+      const allProofUrls = proof_urls || (proof_url ? [proof_url] : []);
+      if (!allProofUrls || allProofUrls.length === 0) {
+        return res.status(400).json({ error: "At least one proof URL is required" });
       }
 
       // For internal collabs, partner_profile_id is required
@@ -1004,27 +1130,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify the partner profile exists (only for internal collabs)
+      let partnerProfile = null;
       if (!is_external && partner_profile_id) {
-        const partnerProfile = await profileService.getById(partner_profile_id);
+        partnerProfile = await profileService.getById(partner_profile_id);
         if (!partnerProfile) {
           return res.status(404).json({ error: "Partner profile not found" });
         }
       }
 
+      // Duplicate detection
+      const isDuplicate = await collaborationService.checkDuplicate(
+        requester_profile_id,
+        is_external ? null : partner_profile_id,
+        campaign_name || null
+      );
+      if (isDuplicate) {
+        return res.status(409).json({ error: "A collaboration with the same partner and campaign already exists" });
+      }
+
       const collab = await collaborationService.create({
         requester_profile_id,
         partner_profile_id: is_external ? null : partner_profile_id,
+        title: title || null,
+        campaign_name: campaign_name || null,
+        date_range: date_range || null,
         description,
         proof_url: proof_url || null,
+        proof_urls: allProofUrls,
         is_external: is_external || false,
         external_partner_name: external_partner_name || null,
         external_partner_url: external_partner_url || null,
       });
 
+      // Send notification to partner for internal collabs
+      if (!is_external && partnerProfile) {
+        await notificationService.create({
+          user_id: partnerProfile.user_id,
+          type: 'new_inquiry',
+          title: 'New Collaboration Request',
+          message: `${requesterProfile.name} has submitted a collaboration request "${title || description}". Please confirm or reject it.`,
+          metadata: { collaboration_id: collab.id, requester_profile_id }
+        });
+      }
+
       res.status(201).json(collab);
     } catch (error) {
       logger.error("Error creating collaboration:", error);
       res.status(500).json({ error: "Failed to create collaboration request" });
+    }
+  });
+
+  // GET /api/collaborations/my - Get current user's collaborations (across all profiles)
+  app.get("/api/collaborations/my", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const collabs = await collaborationService.getByUserId(userId);
+      res.json(collabs);
+    } catch (error) {
+      logger.error("Error fetching user collaborations:", error);
+      res.status(500).json({ error: "Failed to fetch collaborations" });
+    }
+  });
+
+  // GET /api/collaborations/pending-confirmation - Get collabs awaiting user's confirmation
+  app.get("/api/collaborations/pending-confirmation", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const collabs = await collaborationService.getPendingConfirmationForUser(userId);
+      res.json(collabs);
+    } catch (error) {
+      logger.error("Error fetching pending confirmations:", error);
+      res.status(500).json({ error: "Failed to fetch pending confirmations" });
     }
   });
 
@@ -1039,6 +1215,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // PUT /api/collaborations/:id/confirm - Partner confirms collaboration
+  app.put("/api/collaborations/:id/confirm", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const collab = await collaborationService.confirmByPartner(req.params.id, userId);
+
+      // Notify the requester that partner confirmed
+      const requesterProfile = await profileService.getById(collab.requester_profile_id);
+      if (requesterProfile) {
+        await notificationService.create({
+          user_id: requesterProfile.user_id,
+          type: 'new_inquiry',
+          title: 'Collaboration Confirmed',
+          message: `Your collaboration request "${collab.title || collab.description}" has been confirmed by your partner and is now awaiting admin review.`,
+          metadata: { collaboration_id: collab.id }
+        });
+      }
+
+      res.json(collab);
+    } catch (error: any) {
+      logger.error("Error confirming collaboration:", error);
+      if (error.message.includes('not the partner') || error.message.includes('not pending')) {
+        return res.status(403).json({ error: error.message });
+      }
+      res.status(500).json({ error: "Failed to confirm collaboration" });
+    }
+  });
+
+  // PUT /api/collaborations/:id/reject-partner - Partner rejects collaboration
+  app.put("/api/collaborations/:id/reject-partner", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user.id;
+      const collab = await collaborationService.rejectByPartner(req.params.id, userId);
+
+      // Notify the requester that partner rejected
+      const requesterProfile = await profileService.getById(collab.requester_profile_id);
+      if (requesterProfile) {
+        await notificationService.create({
+          user_id: requesterProfile.user_id,
+          type: 'new_inquiry',
+          title: 'Collaboration Rejected',
+          message: `Your collaboration request "${collab.title || collab.description}" was rejected by the partner.`,
+          metadata: { collaboration_id: collab.id }
+        });
+      }
+
+      res.json(collab);
+    } catch (error: any) {
+      logger.error("Error rejecting collaboration by partner:", error);
+      if (error.message.includes('not the partner') || error.message.includes('not pending')) {
+        return res.status(403).json({ error: error.message });
+      }
+      res.status(500).json({ error: "Failed to reject collaboration" });
+    }
+  });
+
   // GET /api/admin/collaborations/pending - Admin: get pending collaborations
   app.get("/api/admin/collaborations/pending", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
@@ -1047,6 +1279,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error fetching pending collaborations:", error);
       res.status(500).json({ error: "Failed to fetch pending collaborations" });
+    }
+  });
+
+  // GET /api/admin/collaborations - Admin: get all collaborations
+  app.get("/api/admin/collaborations", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const collabs = await collaborationService.getAll();
+      res.json(collabs);
+    } catch (error) {
+      logger.error("Error fetching all collaborations:", error);
+      res.status(500).json({ error: "Failed to fetch collaborations" });
     }
   });
 
@@ -1090,20 +1333,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
 
-      // Send email notifications
-      const partnerName = collab.is_external
-        ? (collab.external_partner_name || 'External Partner')
-        : null;
-
+      // Send notifications to both parties
       if (requesterProfile) {
-        const partnerDisplayName = partnerName || partnerProfile?.name || 'Partner';
+        const partnerDisplayName = collab.is_external
+          ? (collab.external_partner_name || 'External Partner')
+          : (partnerProfile?.name || 'Partner');
+
+        await notificationService.create({
+          user_id: requesterProfile.user_id,
+          type: 'profile_approved',
+          title: 'Collaboration Approved!',
+          message: `Your collaboration "${collab.title || collab.description}" with ${partnerDisplayName} has been verified and approved.`,
+          metadata: { collaboration_id: collab.id }
+        });
+
         emailService.sendCollaborationApprovedEmail(
           requesterProfile.user_id, requesterProfile.name, partnerDisplayName, collab.description
         ).catch(err => logger.error('[Email] Failed to send collab approve email (requester):', err));
       }
 
-      // Send to partner only for internal collabs
       if (partnerProfile && requesterProfile) {
+        await notificationService.create({
+          user_id: partnerProfile.user_id,
+          type: 'profile_approved',
+          title: 'Collaboration Approved!',
+          message: `Your collaboration "${collab.title || collab.description}" with ${requesterProfile.name} has been verified and approved.`,
+          metadata: { collaboration_id: collab.id }
+        });
+
         emailService.sendCollaborationApprovedEmail(
           partnerProfile.user_id, partnerProfile.name, requesterProfile.name, collab.description
         ).catch(err => logger.error('[Email] Failed to send collab approve email (partner):', err));
@@ -1144,13 +1401,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const [requesterProfile, partnerProfile] = await Promise.all([requesterProfilePromise, partnerProfilePromise]);
 
-      // Send email notification to requester
-      const partnerName = collab.is_external
-        ? (collab.external_partner_name || 'External Partner')
-        : null;
-
+      // Send notification to requester
       if (requesterProfile) {
-        const partnerDisplayName = partnerName || partnerProfile?.name || 'Partner';
+        const partnerDisplayName = collab.is_external
+          ? (collab.external_partner_name || 'External Partner')
+          : (partnerProfile?.name || 'Partner');
+
+        await notificationService.create({
+          user_id: requesterProfile.user_id,
+          type: 'profile_rejected',
+          title: 'Collaboration Rejected',
+          message: `Your collaboration "${collab.title || collab.description}" with ${partnerDisplayName} was not approved.${admin_notes ? ` Reason: ${admin_notes}` : ''}`,
+          metadata: { collaboration_id: collab.id, reason: admin_notes }
+        });
+
         emailService.sendCollaborationRejectedEmail(
           requesterProfile.user_id, requesterProfile.name, partnerDisplayName, collab.description, admin_notes
         ).catch(err => logger.error('[Email] Failed to send collab rejection email:', err));
@@ -1167,7 +1431,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/collaborations", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const adminUserId = req.user.id;
-      const { requester_profile_id, partner_profile_id, description, proof_url, is_external, external_partner_name, external_partner_url, auto_approve } = req.body;
+      const {
+        requester_profile_id, partner_profile_id, title, campaign_name,
+        date_range, description, proof_url, proof_urls,
+        is_external, external_partner_name, external_partner_url, auto_approve
+      } = req.body;
 
       if (!requester_profile_id || !description) {
         return res.status(400).json({ error: "Missing required fields: requester_profile_id, description" });
@@ -1187,11 +1455,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Requester profile not found" });
       }
 
+      const allProofUrls = proof_urls || (proof_url ? [proof_url] : []);
+
       const collab = await collaborationService.create({
         requester_profile_id,
         partner_profile_id: is_external ? null : partner_profile_id,
+        title: title || null,
+        campaign_name: campaign_name || null,
+        date_range: date_range || null,
         description,
         proof_url: proof_url || null,
+        proof_urls: allProofUrls,
         is_external: is_external || false,
         external_partner_name: external_partner_name || null,
         external_partner_url: external_partner_url || null,

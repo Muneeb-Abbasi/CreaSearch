@@ -17,6 +17,8 @@ import AboutPage from "@/pages/AboutPage";
 import ContactPage from "@/pages/ContactPage";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
 import TermsOfServicePage from "@/pages/TermsOfServicePage";
+import MyCollaborationsPage from "@/pages/MyCollaborationsPage";
+import CollaborationSubmitPage from "@/pages/CollaborationSubmitPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -36,6 +38,8 @@ function Router() {
       <Route path="/contact" component={ContactPage} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
       <Route path="/terms" component={TermsOfServicePage} />
+      <Route path="/collaborations" component={MyCollaborationsPage} />
+      <Route path="/collaborations/submit" component={CollaborationSubmitPage} />
       <Route component={NotFound} />
     </Switch>
   );
