@@ -1,0 +1,11 @@
+Latest Profiles:
+
+Profile: Muneeb Masroor (b9f50cd2-5551-4b20-9872-9aef4778875e)
+Social links JSONB: {"youtube":{"url":"https://www.youtube.com/@muneebahmedabbasi6840","status":"PENDING"},"facebook":{"url":"https://www.facebook.com/MuneebAhmedAbbasi2020/","status":"PENDING"},"linkedin":"https://www.linkedin.com/in/muneebahmedabbasi/","instagram":{"url":"https://www.instagram.com/muneeb_ahmed_abbasi/","status":"PENDING"}}
+  Social Accounts (count: 1):
+    - Platform: youtube, Status: verified, URL: https://www.youtube.com/@muneebahmedabbasi6840
+
+Profile: Muneeb Ahmed Abbasi (5b4f235d-1909-40c5-aa66-fecbce4c9bd5)
+Social links JSONB: {"twitter":"https://www.twitter.com/muneeb","youtube":{"url":"https://www.youtube.com/@muneebahmedabbasi6840","status":"PENDING"},"linkedin":"https://www.linkedin.com/in/muneebahmedabbasi/","instagram":{"url":"https://www.instagram.com/muneeb_ahmed_abbasi/","status":"PENDING"}}
+  Social Accounts (count: 1):
+    - Platform: youtube, Status: verified, URL: https://www.youtube.com/@muneebahmedabbasi6840
