@@ -413,12 +413,13 @@ export default function ProfileCreationPage() {
         });
       }
 
+      // Verify social accounts sequentially with delays to avoid rate limiting
+      const { verificationApi } = await import("@/lib/api");
+
       // Verify YouTube channel immediately if provided
       if (formData.youtube && createdProfile.id) {
         try {
-          // Check if it looks like a YouTube URL before trying to verify API
           if (formData.youtube.includes('youtube.com') || formData.youtube.includes('youtu.be')) {
-            const { verificationApi } = await import("@/lib/api");
             const ytResult = await verificationApi.verifyYouTube(formData.youtube, createdProfile.id);
 
             if (ytResult.success) {
@@ -436,14 +437,13 @@ export default function ProfileCreationPage() {
           }
         } catch (ytError) {
           console.error("YouTube verification failed:", ytError);
-          // Don't block profile creation for verification failure
         }
       }
 
-      // Queue Instagram verification if provided (background processing)
+      // Stagger: wait 2s before next verification to avoid rate-limiting
       if (formData.instagram && createdProfile.id) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
         try {
-          const { verificationApi } = await import("@/lib/api");
           await verificationApi.verifyInstagram(formData.instagram, createdProfile.id);
           toast({
             title: "Instagram Queued",
@@ -451,14 +451,13 @@ export default function ProfileCreationPage() {
           });
         } catch (igError) {
           console.error("Instagram queue failed:", igError);
-          // Don't block profile creation
         }
       }
 
-      // Queue Facebook verification if provided (background processing)
+      // Stagger: wait 2s before next verification
       if (formData.facebook && createdProfile.id) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
         try {
-          const { verificationApi } = await import("@/lib/api");
           await verificationApi.verifyFacebook(formData.facebook, createdProfile.id);
           toast({
             title: "Facebook Queued",
@@ -466,7 +465,6 @@ export default function ProfileCreationPage() {
           });
         } catch (fbError) {
           console.error("Facebook queue failed:", fbError);
-          // Don't block profile creation
         }
       }
 

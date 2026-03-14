@@ -73,7 +73,14 @@ export const verificationQueueService = {
             throw error;
         }
 
-        logger.info(`[VerifyQueue] Enqueued ${taskType} task for ${platform}/${profileId}`);
+        // Calculate estimated processing time based on next cron run
+        const now = new Date();
+        const nextCronHour = Math.ceil(now.getHours() / 4) * 4; // Instagram queue runs every 4 hours
+        const estimatedProcessing = new Date(now);
+        estimatedProcessing.setHours(nextCronHour, 0, 0, 0);
+        if (estimatedProcessing <= now) estimatedProcessing.setHours(estimatedProcessing.getHours() + 4);
+
+        logger.info(`[VerifyQueue] Profile ${profileId} queued for ${platform} verification at ${now.toISOString()}, estimated processing: ${estimatedProcessing.toISOString()}, task_type: ${taskType}`);
         return data;
     },
 
@@ -205,13 +212,32 @@ export const verificationQueueService = {
                 // Update the profile's total follower count and score
                 await this.recalculateProfileFollowers(task.profile_id);
                 await scoringService.updateProfileScore(task.profile_id);
-                logger.info(`[VerifyQueue] ✅ ${task.platform} verification completed for profile ${task.profile_id}`);
+                logger.info(`[VerifyQueue] Verification completed for ${task.profile_id}/${task.platform} at ${new Date().toISOString()} (attempt ${task.retry_count + 1})`);
+
+                // Send notification to the profile owner
+                try {
+                    const { profileService, notificationService } = await import('./database');
+                    const profile = await profileService.getById(task.profile_id);
+                    if (profile) {
+                        const platformName = task.platform.charAt(0).toUpperCase() + task.platform.slice(1);
+                        await notificationService.create({
+                            user_id: profile.user_id,
+                            type: 'verification_complete',
+                            title: `${platformName} Verification Complete`,
+                            message: `Your ${platformName} account has been verified successfully.`,
+                            metadata: { profile_id: task.profile_id, platform: task.platform }
+                        });
+                    }
+                } catch (notifError) {
+                    logger.error(`[VerifyQueue] Failed to send verification notification:`, notifError);
+                }
+
                 return true;
             }
 
             return false;
         } catch (error: any) {
-            logger.error(`[VerifyQueue] ❌ ${task.platform} verification failed for profile ${task.profile_id}:`, error.message);
+            logger.error(`[VerifyQueue] Verification failed for ${task.profile_id}/${task.platform} at ${new Date().toISOString()}: ${error.message}`);
             await this.markFailed(task.id, error.message);
             return false;
         }

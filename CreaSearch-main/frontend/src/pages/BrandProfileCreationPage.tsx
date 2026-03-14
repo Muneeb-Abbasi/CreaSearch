@@ -433,7 +433,7 @@ export default function BrandProfileCreationPage() {
         profileId = createdProfile.id;
       }
 
-      // Queue Instagram verification if provided
+      // Queue social verifications sequentially with delays to avoid rate limiting
       if (formData.instagram && profileId) {
         try {
           const { verificationApi } = await import("@/lib/api");
@@ -443,8 +443,11 @@ export default function BrandProfileCreationPage() {
         }
       }
 
-      // Queue Facebook verification if provided
+      // Stagger: wait 2s before next verification to avoid rate-limiting
       if (formData.facebook && profileId) {
+        if (formData.instagram) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
         try {
           const { verificationApi } = await import("@/lib/api");
           await verificationApi.verifyFacebook(formData.facebook, profileId);
