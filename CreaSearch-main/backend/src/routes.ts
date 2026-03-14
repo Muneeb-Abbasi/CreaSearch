@@ -472,6 +472,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastUpdated: new Date().toISOString()
           }
         });
+
+        // Send verification completion notification
+        try {
+          const profile = await profileService.getById(profileId);
+          if (profile) {
+            await notificationService.create({
+              user_id: profile.user_id,
+              type: 'verification_complete',
+              title: 'YouTube Verification Complete',
+              message: `Your YouTube channel "${result.channelTitle}" has been verified with ${result.subscribers?.toLocaleString() || 0} subscribers.`,
+              metadata: { profile_id: profileId, platform: 'youtube', subscribers: result.subscribers }
+            });
+          }
+        } catch (notifError) {
+          logger.error('[Notification] Failed to send YouTube verification notification:', notifError);
+        }
       }
 
       res.json({
@@ -560,6 +576,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
               lastUpdated: new Date().toISOString()
             }
           });
+
+          // Send verification completion notification
+          try {
+            const profile = await profileService.getById(profileId);
+            if (profile) {
+              await notificationService.create({
+                user_id: profile.user_id,
+                type: 'verification_complete',
+                title: 'Instagram Verification Complete',
+                message: `Your Instagram account @${result.username} has been verified with ${result.followers?.toLocaleString() || 0} followers.`,
+                metadata: { profile_id: profileId, platform: 'instagram', followers: result.followers }
+              });
+            }
+          } catch (notifError) {
+            logger.error('[Notification] Failed to send Instagram verification notification:', notifError);
+          }
         }
 
         return res.json({
@@ -632,6 +664,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
               lastUpdated: new Date().toISOString()
             }
           });
+
+          // Send verification completion notification
+          try {
+            const profile = await profileService.getById(profileId);
+            if (profile) {
+              await notificationService.create({
+                user_id: profile.user_id,
+                type: 'verification_complete',
+                title: 'Facebook Verification Complete',
+                message: `Your Facebook page "${result.pageName}" has been verified with ${result.followers?.toLocaleString() || 0} followers.`,
+                metadata: { profile_id: profileId, platform: 'facebook', followers: result.followers }
+              });
+            }
+          } catch (notifError) {
+            logger.error('[Notification] Failed to send Facebook verification notification:', notifError);
+          }
         }
 
         return res.json({
@@ -670,20 +718,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/verify-instagram-now/:id - Admin: Force immediate Instagram verification
   app.post("/api/admin/verify-instagram-now/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const accounts = await socialAccountService.getByProfileId(req.params.id);
+      const profileId = req.params.id;
+      const accounts = await socialAccountService.getByProfileId(profileId);
       const instagramAccount = accounts.find(a => a.platform === 'instagram');
 
-      if (!instagramAccount) {
-        return res.status(400).json({ error: "Profile has no Instagram link" });
+      // Fallback to profiles.social_links if no social_accounts row exists
+      let instagramUrl = instagramAccount?.platform_url;
+      if (!instagramUrl) {
+        const profile = await profileService.getById(profileId);
+        instagramUrl = profile?.social_links?.instagram;
       }
 
-      const instagramUrl = instagramAccount.platform_url;
+      if (!instagramUrl) {
+        return res.status(400).json({ error: "Profile has no Instagram link" });
+      }
 
       const { verifyInstagramProfile } = await import("./services/instagram");
       const result = await verifyInstagramProfile(instagramUrl);
 
       if (result.status === 'VALIDATED') {
-        await socialAccountService.updateVerification(req.params.id, 'instagram', {
+        // Use upsert to handle both existing and new social_accounts rows
+        await socialAccountService.upsert(profileId, {
+          platform: 'instagram',
+          platform_url: instagramUrl,
           platform_username: result.username,
           display_name: result.fullName,
           follower_count: result.followers || 0,
@@ -701,6 +758,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastUpdated: new Date().toISOString()
           }
         });
+
+        // Send verification completion notification
+        try {
+          const profile = await profileService.getById(profileId);
+          if (profile) {
+            await notificationService.create({
+              user_id: profile.user_id,
+              type: 'verification_complete',
+              title: 'Instagram Verification Complete',
+              message: `Your Instagram account @${result.username} has been verified with ${result.followers?.toLocaleString() || 0} followers.`,
+              metadata: { profile_id: profileId, platform: 'instagram', followers: result.followers }
+            });
+          }
+        } catch (notifError) {
+          logger.error('[Notification] Failed to send Instagram verification notification:', notifError);
+        }
       }
 
       res.json({
@@ -716,20 +789,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // POST /api/admin/verify-facebook-now/:id - Admin: Force immediate Facebook verification
   app.post("/api/admin/verify-facebook-now/:id", requireAdmin, async (req: Request, res: Response) => {
     try {
-      const accounts = await socialAccountService.getByProfileId(req.params.id);
+      const profileId = req.params.id;
+      const accounts = await socialAccountService.getByProfileId(profileId);
       const facebookAccount = accounts.find(a => a.platform === 'facebook');
 
-      if (!facebookAccount) {
-        return res.status(400).json({ error: "Profile has no Facebook link" });
+      // Fallback to profiles.social_links if no social_accounts row exists
+      let facebookUrl = facebookAccount?.platform_url;
+      if (!facebookUrl) {
+        const profile = await profileService.getById(profileId);
+        facebookUrl = profile?.social_links?.facebook;
       }
 
-      const facebookUrl = facebookAccount.platform_url;
+      if (!facebookUrl) {
+        return res.status(400).json({ error: "Profile has no Facebook link" });
+      }
 
       const { verifyFacebookProfile } = await import("./services/facebook");
       const result = await verifyFacebookProfile(facebookUrl);
 
       if (result.status === 'VALIDATED') {
-        await socialAccountService.updateVerification(req.params.id, 'facebook', {
+        // Use upsert to handle both existing and new social_accounts rows
+        await socialAccountService.upsert(profileId, {
+          platform: 'facebook',
+          platform_url: facebookUrl,
           platform_username: result.pageName,
           display_name: result.pageName,
           follower_count: result.followers || 0,
@@ -743,6 +825,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastUpdated: new Date().toISOString()
           }
         });
+
+        // Send verification completion notification
+        try {
+          const profile = await profileService.getById(profileId);
+          if (profile) {
+            await notificationService.create({
+              user_id: profile.user_id,
+              type: 'verification_complete',
+              title: 'Facebook Verification Complete',
+              message: `Your Facebook page "${result.pageName}" has been verified with ${result.followers?.toLocaleString() || 0} followers.`,
+              metadata: { profile_id: profileId, platform: 'facebook', followers: result.followers }
+            });
+          }
+        } catch (notifError) {
+          logger.error('[Notification] Failed to send Facebook verification notification:', notifError);
+        }
       }
 
       res.json({

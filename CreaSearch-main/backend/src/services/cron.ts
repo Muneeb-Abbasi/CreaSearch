@@ -44,6 +44,24 @@ async function refreshYouTubeForAccount(account: SocialAccount): Promise<boolean
                 }
             });
             logger.info(`[Cron] Updated YouTube for profile ${account.profile_id}: ${result.subscribers} subscribers`);
+
+            // Send verification/refresh notification to the profile owner
+            try {
+                const { profileService, notificationService } = await import('./database');
+                const profile = await profileService.getById(account.profile_id);
+                if (profile) {
+                    await notificationService.create({
+                        user_id: profile.user_id,
+                        type: 'verification_complete',
+                        title: 'YouTube Stats Updated',
+                        message: `Your YouTube channel "${result.channelTitle}" stats have been refreshed: ${result.subscribers?.toLocaleString() || 0} subscribers.`,
+                        metadata: { profile_id: account.profile_id, platform: 'youtube', subscribers: result.subscribers }
+                    });
+                }
+            } catch (notifError) {
+                logger.error(`[Cron] Failed to send YouTube refresh notification:`, notifError);
+            }
+
             return true;
         }
         return false;

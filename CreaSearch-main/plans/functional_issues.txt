@@ -1,0 +1,138 @@
+list of observable / functional issues.
+
+You can give this directly for implementation planning.
+
+---
+
+# 🚨 Issues Identified from Backend Logs & Observed Behaviour
+
+## 🔴 Excessive Repeated Requests / Possible High-Frequency Polling
+
+* Very frequent repeated calls within seconds to the same endpoints:
+
+  * `/api/notifications/unread-count`
+  * `/api/profiles`
+  * `/api/featured-profiles`
+  * `/api/admin/pending`
+  * `/api/categories`
+* Many responses return `304 Not Modified`
+* Request bursts observed at **1–3 second intervals**
+* Indicates high request churn despite cached responses
+
+---
+
+## 🔴 Rate Limiting Responses (HTTP 429)
+
+* Rate limit responses recorded on:
+
+  * `POST /api/verify/youtube`
+  * `POST /api/verify/instagram`
+  * `POST /api/verify/facebook`
+  * `POST /api/reviews`
+* Multiple verification requests triggered nearly simultaneously
+* Verification actions clustered within same timestamp window
+
+---
+
+## 🔴 Admin Verification Endpoint Failures (HTTP 400)
+
+* Manual admin verification attempts failing on:
+
+  * `POST /api/admin/verify-instagram-now/{profileId}`
+  * `POST /api/admin/verify-facebook-now/{profileId}`
+* System message shown:
+
+  * **“Failed to verify — profile has no Instagram or Facebook link.”**
+* Same profile ID repeatedly used in failed verification attempts
+
+---
+
+## 🔴 Missing Verification Completion Notification (YouTube)
+
+* When YouTube verification process completes:
+
+  * No observable notification event logged for the user
+  * No confirmation activity recorded in logs indicating user notification dispatch
+* Verification completion state transition not clearly visible in logs
+
+---
+
+## 🔴 Missing Verification Timestamp Logging
+
+* Logs do not record:
+
+  * exact verification completion time for YouTube verification
+  * scheduled verification execution time for Instagram or Facebook queue verification
+* No structured log entries indicating:
+
+  * **“Verification scheduled at {timestamp}”**
+  * **“Verification completed at {timestamp}”**
+
+---
+
+## 🔴 Verification Queue Timing Not Visible in Logs
+
+* Instagram verification job runs periodically (every 4 hours as per cron init)
+* Logs do not show:
+
+  * when a specific profile is queued
+  * expected execution time for queued verification
+* Facebook verification scheduling timing also not visible
+
+---
+
+## 🔴 Notification Count Update Behaviour Unclear
+
+* `/api/notifications/unread-count` endpoint hit very frequently
+* No clear log indication that notification count changes after:
+
+  * verification completion
+  * admin approval/rejection actions
+* Cached (`304`) responses dominate notification count requests
+
+---
+
+## 🔴 Slow Response Times on Some Endpoints
+
+Observed higher latency responses:
+
+* `/api/upload/photo` → ~3131 ms
+* `/api/admin/pending` → up to ~1287 ms
+* `/api/notifications/unread-count` → up to ~1750 ms
+* `/api/profiles` → up to ~1024 ms
+* `/api/admin/approve` → ~2753 ms
+
+Indicates inconsistent API performance patterns.
+
+---
+
+## 🔴 High Latency Even on Cached (304) Responses
+
+* Some `304 Not Modified` responses still taking:
+
+  * 500–1000+ ms
+* Suggests noticeable processing overhead even when data unchanged
+
+---
+
+## 🔴 Concurrent Social Verification Trigger Pattern
+
+* After profile update events:
+
+  * Verification requests for YouTube, Instagram, and Facebook triggered in rapid succession
+* These clustered requests resulted in rate-limit responses
+
+---
+
+## 🔴 Repeated Access Patterns to Same Profile Resources
+
+* Same profile IDs repeatedly requested across:
+
+  * profile details
+  * reviews
+  * collaborations
+* Requests occur in tight time windows
+
+---
+
+
