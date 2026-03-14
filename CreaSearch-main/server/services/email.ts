@@ -35,7 +35,7 @@ async function getUserEmail(userId: string): Promise<string | null> {
 }
 
 // Email templates
-const FROM_EMAIL = 'Creasearch <onboarding@resend.dev>'; // Use verified domain in production
+const FROM_EMAIL = 'Creasearch <dev@pakistanrecruitment.com>'; // Use verified domain in production
 
 export const emailService = {
     async sendProfileApprovedEmail(userId: string, name: string): Promise<boolean> {

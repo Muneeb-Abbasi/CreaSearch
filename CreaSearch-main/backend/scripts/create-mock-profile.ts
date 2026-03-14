@@ -1,12 +1,13 @@
 // Script to create a mock profile for testing reviews
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '../src/utils/logger';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('❌ Missing environment variables. Make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.');
+    logger.error('❌ Missing environment variables. Make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.');
     process.exit(1);
 }
 
@@ -38,7 +39,7 @@ async function createMockProfile() {
         status: 'approved' // Already approved so it shows in the discovery page
     };
 
-    console.log('Creating mock profile...');
+    logger.info('Creating mock profile...');
 
     const { data, error } = await supabase
         .from('profiles')
@@ -47,15 +48,15 @@ async function createMockProfile() {
         .single();
 
     if (error) {
-        console.error('Error creating profile:', error);
+        logger.error('Error creating profile:', error);
         return;
     }
 
-    console.log('✅ Mock profile created successfully!');
-    console.log('Profile ID:', data.id);
-    console.log('Name:', data.name);
-    console.log('Status:', data.status);
-    console.log('\nYou can now visit: http://localhost:5174/creator/' + data.id);
+    logger.info('✅ Mock profile created successfully!');
+    logger.info('Profile ID:', data.id);
+    logger.info('Name:', data.name);
+    logger.info('Status:', data.status);
+    logger.info('\nYou can now visit: http://localhost:5174/creator/' + data.id);
 }
 
 createMockProfile();

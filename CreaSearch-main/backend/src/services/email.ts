@@ -36,7 +36,7 @@ async function getUserEmail(userId: string): Promise<string | null> {
 }
 
 // Configurable FROM_EMAIL: use env variable or fall back to Resend test domain
-const FROM_EMAIL = process.env.FROM_EMAIL || 'Creasearch <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'Creasearch <dev@pakistanrecruitment.com>';
 
 // Shared email header/footer for consistent branding
 const emailHeader = `

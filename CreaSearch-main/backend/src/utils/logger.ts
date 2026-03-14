@@ -85,6 +85,15 @@ function createLogEntry(level: string, prefix: string, args: unknown[]) {
   return sanitizedArgs;
 }
 
+function getTimestamp() {
+  return new Date().toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
 export const logger = {
   debug(prefix: string, ...args: unknown[]) {
     if (!shouldLog('debug')) return;
@@ -92,7 +101,7 @@ export const logger = {
     if (IS_PRODUCTION) {
       console.log(output);
     } else {
-      console.log(`[DEBUG]${prefix}`, ...formatArgs(args));
+      console.log(`[${getTimestamp()}] [DEBUG]${prefix}`, ...formatArgs(args));
     }
   },
 
@@ -102,7 +111,7 @@ export const logger = {
     if (IS_PRODUCTION) {
       console.log(output);
     } else {
-      console.log(`[INFO]${prefix}`, ...formatArgs(args));
+      console.log(`[${getTimestamp()}] [INFO]${prefix}`, ...formatArgs(args));
     }
   },
 
@@ -112,7 +121,7 @@ export const logger = {
     if (IS_PRODUCTION) {
       console.warn(output);
     } else {
-      console.warn(`[WARN]${prefix}`, ...formatArgs(args));
+      console.warn(`[${getTimestamp()}] [WARN]${prefix}`, ...formatArgs(args));
     }
   },
 
@@ -122,7 +131,7 @@ export const logger = {
     if (IS_PRODUCTION) {
       console.error(output);
     } else {
-      console.error(`[ERROR]${prefix}`, ...formatArgs(args));
+      console.error(`[${getTimestamp()}] [ERROR]${prefix}`, ...formatArgs(args));
     }
   },
 };

@@ -1,12 +1,13 @@
 // Script to clean up old rejected profiles for user
 import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
+import { logger } from '../src/utils/logger';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseServiceKey) {
-    console.error('❌ Missing environment variables. Make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.');
+    logger.error('❌ Missing environment variables. Make sure SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.');
     process.exit(1);
 }
 
@@ -16,11 +17,11 @@ async function cleanupProfiles() {
     const userId = process.argv[2];
 
     if (!userId) {
-        console.error('❌ Usage: npx tsx cleanup-profiles.ts <user_id>');
+        logger.error('❌ Usage: npx tsx cleanup-profiles.ts <user_id>');
         process.exit(1);
     }
 
-    console.log('Deleting rejected profiles for user:', userId);
+    logger.info('Deleting rejected profiles for user:', userId);
 
     const { data, error } = await supabase
         .from('profiles')
@@ -30,11 +31,11 @@ async function cleanupProfiles() {
         .select();
 
     if (error) {
-        console.error('Error:', error);
+        logger.error('Error:', error);
         return;
     }
 
-    console.log(`✅ Deleted ${data?.length || 0} rejected profiles`);
+    logger.info(`✅ Deleted ${data?.length || 0} rejected profiles`);
 
     // Show remaining profiles
     const { data: remaining } = await supabase
@@ -42,9 +43,9 @@ async function cleanupProfiles() {
         .select('id, name, status')
         .eq('user_id', userId);
 
-    console.log('\nRemaining profiles:');
+    logger.info('\nRemaining profiles:');
     remaining?.forEach(p => {
-        console.log(`  - ${p.name} (${p.status})`);
+        logger.info(`  - ${p.name} (${p.status})`);
     });
 }
 
