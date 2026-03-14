@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { type Request, Response, NextFunction } from "express";
 import cors from 'cors';
 import { createServer } from "http";
+import compression from 'compression';
 import { registerRoutes } from "./routes";
 import { apiRateLimit } from "./middleware/rateLimit";
 import { logger } from "./utils/logger";
@@ -18,7 +19,7 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, curl, etc)
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.some(allowed => origin === allowed || origin.endsWith('.vercel.app'))) {
+    if (allowedOrigins.some(allowed => origin === allowed || /^https:\/\/creasearch.*\.vercel\.app$/.test(origin))) {
       callback(null, true);
     } else {
       logger.warn('CORS blocked request', { origin });
@@ -40,6 +41,9 @@ app.use((req, res, next) => {
 // Parse JSON bodies
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: false }));
+
+// Add response compression
+app.use(compression());
 
 // Apply rate limiting to API routes
 app.use('/api', apiRateLimit);

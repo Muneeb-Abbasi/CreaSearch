@@ -7,20 +7,37 @@ import { emailService } from "./services/email";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { logger } from "./utils/logger";
 import { sensitiveRateLimit } from "./middleware/rateLimit";
+import { cacheMiddleware } from "./middleware/cache";
+import { fileTypeFromBuffer } from "file-type";
 
 
 // Configure multer for file uploads
-const upload = multer({
+const uploadPhoto = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB max
+    fileSize: 10 * 1024 * 1024, // 10MB max
   },
   fileFilter: (req, file, cb) => {
-    // Allow images and videos
-    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+    // Allow images
+    if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only images and videos are allowed'));
+      cb(new Error('Only images are allowed'));
+    }
+  }
+});
+
+const uploadVideo = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB max
+  },
+  fileFilter: (req, file, cb) => {
+    // Allow videos
+    if (file.mimetype.startsWith('video/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only videos are allowed'));
     }
   }
 });
@@ -29,7 +46,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============= CATEGORY & NICHE ROUTES =============
 
   // GET /api/categories - List all active categories
-  app.get("/api/categories", async (req: Request, res: Response) => {
+  app.get("/api/categories", cacheMiddleware(60), async (req: Request, res: Response) => {
     try {
       const categories = await categoryService.getAll();
       res.json(categories);
@@ -40,7 +57,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/categories/:id/niches - List niches for a category
-  app.get("/api/categories/:id/niches", async (req: Request, res: Response) => {
+  app.get("/api/categories/:id/niches", cacheMiddleware(60), async (req: Request, res: Response) => {
     try {
       const niches = await categoryService.getNichesByCategory(req.params.id);
       res.json(niches);
@@ -51,7 +68,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/niches - List all niches (optional filter by category_id query param)
-  app.get("/api/niches", async (req: Request, res: Response) => {
+  app.get("/api/niches", cacheMiddleware(60), async (req: Request, res: Response) => {
     try {
       const categoryId = req.query.category_id as string;
       const niches = categoryId
@@ -111,7 +128,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/profiles - List all approved profiles with filters
-  app.get("/api/profiles", async (req: Request, res: Response) => {
+  app.get("/api/profiles", cacheMiddleware(60), async (req: Request, res: Response) => {
     try {
       const filters: ProfileFilters = {
         search: req.query.search as string,
@@ -397,7 +414,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============= UPLOAD ROUTES =============
 
   // POST /api/upload/photo
-  app.post("/api/upload/photo", requireAuth, upload.single('photo'), async (req: Request, res: Response) => {
+  app.post("/api/upload/photo", requireAuth, uploadPhoto.single('photo'), async (req: Request, res: Response) => {
     try {
       // Use verified user ID
       const userId = req.user.id;
@@ -405,10 +422,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!file) return res.status(400).json({ error: "No file uploaded" });
 
+      // Validate magic bytes
+      const fileType = await fileTypeFromBuffer(file.buffer);
+      if (!fileType || !fileType.mime.startsWith('image/')) {
+        return res.status(400).json({ error: "Invalid file type detected by contents" });
+      }
+
+      // Sanitize original filename
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+
       const result = await storageService.uploadProfilePhoto(
         userId,
         file.buffer,
-        file.originalname,
+        safeName,
         file.mimetype
       );
 
@@ -420,17 +446,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/upload/video
-  app.post("/api/upload/video", requireAuth, upload.single('video'), async (req: Request, res: Response) => {
+  app.post("/api/upload/video", requireAuth, uploadVideo.single('video'), async (req: Request, res: Response) => {
     try {
       const userId = req.user.id;
       const file = req.file;
 
       if (!file) return res.status(400).json({ error: "No file uploaded" });
 
+      // Validate magic bytes
+      const fileType = await fileTypeFromBuffer(file.buffer);
+      if (!fileType || !fileType.mime.startsWith('video/')) {
+        return res.status(400).json({ error: "Invalid file type detected by contents" });
+      }
+
+      // Sanitize original filename
+      const safeName = file.originalname.replace(/[^a-zA-Z0-9.-]/g, '_');
+
       const result = await storageService.uploadVideoIntro(
         userId,
         file.buffer,
-        file.originalname,
+        safeName,
         file.mimetype
       );
 
