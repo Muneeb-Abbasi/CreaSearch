@@ -1,0 +1,93 @@
+# Fix Log Issues — Performance, Caching, Errors & Polling
+
+Addresses 12 issues identified in [log_issues.txt](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/plans/log_issues.txt) related to excessive polling, high response latencies, cache inconsistency, upload errors, and admin verification failures.
+
+---
+
+## Proposed Changes
+
+### Backend Caching & Rate Limiting
+
+#### [MODIFY] [rateLimit.ts](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/rateLimit.ts)
+
+- Replace shared `sensitiveRateLimit` on verification routes with a new `verificationRateLimit` — **per-platform, 100 req/min**
+- Key format: `verify:{platform}:{clientId}` so each platform (youtube, instagram, facebook) has its own independent limit
+- Export `verificationRateLimit` as a new function that takes a `platform` string parameter
+
+#### [MODIFY] [cache.ts](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts)
+
+- Reduce verbose `[Cache] HIT` / `[Cache] MISS` logging to [debug](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/utils/logger.ts#98-107) level (currently [info](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/utils/logger.ts#108-117) level floods logs)
+- This is the root cause of the "Cache Behaviour Inconsistency" log spam — the cache is working correctly but logging every hit/miss at info level makes it look broken
+
+---
+
+#### [MODIFY] [routes.ts](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/routes.ts)
+
+**Caching additions** (addresses issues: High Latency on Cached Responses, Profile Fetch Latency, Admin Pending Performance, Featured Profiles Latency, Notification Count Spikes):
+- Add [cacheMiddleware(30)](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#12-66) to `/api/notifications/unread-count` (user-scoped, short TTL)
+- Add [cacheMiddleware(30)](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#12-66) to `/api/admin/pending`
+- Add [cacheMiddleware(120)](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#12-66) to `/api/featured-profiles` (public, changes rarely)
+- Add [cacheMiddleware(30)](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#12-66) to `/api/profiles/:id` (profile detail page)
+- Increase TTL on `/api/categories` and `/api/profiles` from `60` to `300` seconds
+
+**Cache invalidation**:
+- Call [invalidateCache('/api/profiles')](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#67-81) after profile create, update, delete
+- Call [invalidateCache('/api/admin/pending')](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#67-81) after approve/reject/delete
+- Call [invalidateCache('/api/featured-profiles')](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#67-81) after feature/unfeature
+- Call [invalidateCache('/api/notifications')](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/backend/src/middleware/cache.ts#67-81) after creating notification or marking read
+
+**Upload fix** (addresses: Upload Photo Endpoint Runtime Error):
+- Change `const { fromBuffer } = await import("file-type")` to use default import pattern:
+  ```typescript
+  const fileType = await import("file-type");
+  const result = await (fileType.fromBuffer || fileType.default?.fromBuffer)(file.buffer);
+  ```
+- Applies to both photo and video upload handlers (lines 425-426, 457-458)
+
+**Admin verification error handling** (addresses: Manual Admin Verification External API Failures):
+- In `/api/admin/verify-instagram-now/:id` and `/api/admin/verify-facebook-now/:id`, when Apify returns 400, propagate the error status to the response instead of silently returning 200
+- Add a `warning` field to the response when external verification fails
+
+**Profile creation performance** (addresses: Profile Creation Endpoint Slow Response):
+- Move `scoringService.updateProfileScore()` to fire-and-forget (use `.catch()` pattern like email)
+- Already done for email; just need to do the same for scoring
+
+---
+
+### Frontend Polling Optimization
+
+#### [MODIFY] [NotificationBell.tsx](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/frontend/src/components/NotificationBell.tsx)
+
+Addresses: Excessive Repeated Calls to Notification Count, Continuous Background Fetch Pattern
+
+- Increase poll interval from `30000ms` to `60000ms` (30s → 60s)
+- Add `document.visibilityState` check — skip fetching when tab is hidden
+- Add a short debounce: if the last fetch was < 5s ago, skip
+
+#### [MODIFY] [api.ts](file:///c:/Users/LENOVO/Downloads/CreaSearch-main/CreaSearch-main/frontend/src/lib/api.ts)
+
+Addresses: Profile Deletion Followed by Repeated 404 Fetches
+
+- In `profileApi.getMyProfile()`, after receiving a 404, set a local flag to avoid repeat calls for the same userId within a short window (prevents the tight 404 loop)
+
+---
+
+## Verification Plan
+
+### Manual Verification
+
+> [!NOTE]
+> No existing test files were found in this project. All verification will be manual.
+
+**Steps:**
+
+1. **Start the backend dev server**: `cd backend && npm run dev`
+2. **Upload photo test**: Upload a photo through the UI and confirm no `500` error / `TypeError: fromBuffer is not a function` in server logs
+3. **Notification polling test**: Open browser DevTools → Network tab, filter by `unread-count`, and verify calls are ~60s apart (not 30s). Switch to another tab for 2+ minutes and verify no calls are made while hidden
+4. **Cache test**: Open DevTools → Network, load the homepage. Check server logs and verify `[Cache] HIT`/`[Cache] MISS` messages are at debug level (not info). Verify `/api/featured-profiles` and `/api/categories` responses are fast after first load
+5. **Profile deletion test**: Delete a profile via admin panel. Verify server logs do NOT show repeated `404` responses for `/api/profiles/me` after deletion
+6. **Admin verification test**: Trigger admin Instagram/Facebook verification. If Apify returns 400, verify the API response includes an error/warning field (not just success: true)
+7. **Profile creation test**: Create a new profile and verify response time is under 1500ms (previously ~2500ms)
+
+> [!TIP]
+> Since this is a production app with no automated tests, I recommend you manually test the upload and admin verification paths after deployment. The caching and polling changes can be verified by watching server logs and browser DevTools.

@@ -100,6 +100,46 @@ export const sensitiveRateLimit = rateLimit({
     message: 'Rate limit exceeded for sensitive operations.'
 });
 
+/**
+ * Per-platform verification rate limit (100 req/min per platform per client)
+ */
+export function verificationRateLimit(platform: string) {
+    const { windowMs, maxRequests, message } = {
+        windowMs: 60 * 1000,   // 1 minute
+        maxRequests: 100,      // 100 requests per minute per platform
+        message: `Too many ${platform} verification requests. Please wait a moment before trying again.`
+    };
+
+    return (req: Request, res: Response, next: NextFunction) => {
+        const clientId = getClientIdentifier(req);
+        const key = `verify:${platform}:${clientId}`;
+        const now = Date.now();
+
+        let entry = requestCounts.get(key);
+
+        if (!entry || now > entry.resetTime) {
+            entry = { count: 1, resetTime: now + windowMs };
+            requestCounts.set(key, entry);
+        } else {
+            entry.count++;
+        }
+
+        res.setHeader('X-RateLimit-Limit', maxRequests);
+        res.setHeader('X-RateLimit-Remaining', Math.max(0, maxRequests - entry.count));
+        res.setHeader('X-RateLimit-Reset', entry.resetTime);
+
+        if (entry.count > maxRequests) {
+            res.status(429).json({
+                error: message,
+                retryAfter: Math.ceil((entry.resetTime - now) / 1000)
+            });
+            return;
+        }
+
+        next();
+    };
+}
+
 // Cleanup old entries periodically (every 5 minutes)
 setInterval(() => {
     const now = Date.now();

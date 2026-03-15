@@ -37,11 +37,11 @@ export const cacheMiddleware = (ttlSeconds: number) => {
 
     if (cached && (now - cached.timestamp < ttlSeconds * 1000)) {
       // Return cached response
-      logger.info(`[Cache] HIT for ${key}`);
+      logger.debug(`[Cache] HIT for ${key}`);
       return res.json(cached.data);
     }
 
-    logger.info(`[Cache] MISS for ${key}`);
+    logger.debug(`[Cache] MISS for ${key}`);
 
     // Store original res.json
     const originalJson = res.json.bind(res);

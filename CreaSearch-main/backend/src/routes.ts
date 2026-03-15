@@ -6,8 +6,8 @@ import { storageService } from "./services/storage";
 import { emailService } from "./services/email";
 import { requireAuth, requireAdmin } from "./middleware/auth";
 import { logger } from "./utils/logger";
-import { sensitiveRateLimit } from "./middleware/rateLimit";
-import { cacheMiddleware } from "./middleware/cache";
+import { sensitiveRateLimit, verificationRateLimit } from "./middleware/rateLimit";
+import { cacheMiddleware, invalidateCache } from "./middleware/cache";
 
 
 // Configure multer for file uploads
@@ -45,7 +45,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============= CATEGORY & NICHE ROUTES =============
 
   // GET /api/categories - List all active categories
-  app.get("/api/categories", cacheMiddleware(60), async (req: Request, res: Response) => {
+  app.get("/api/categories", cacheMiddleware(300), async (req: Request, res: Response) => {
     try {
       const categories = await categoryService.getAll();
       res.json(categories);
@@ -56,7 +56,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/categories/:id/niches - List niches for a category
-  app.get("/api/categories/:id/niches", cacheMiddleware(60), async (req: Request, res: Response) => {
+  app.get("/api/categories/:id/niches", cacheMiddleware(300), async (req: Request, res: Response) => {
     try {
       const niches = await categoryService.getNichesByCategory(req.params.id);
       res.json(niches);
@@ -67,7 +67,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/niches - List all niches (optional filter by category_id query param)
-  app.get("/api/niches", cacheMiddleware(60), async (req: Request, res: Response) => {
+  app.get("/api/niches", cacheMiddleware(300), async (req: Request, res: Response) => {
     try {
       const categoryId = req.query.category_id as string;
       const niches = categoryId
@@ -127,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/profiles - List all approved profiles with filters
-  app.get("/api/profiles", cacheMiddleware(60), async (req: Request, res: Response) => {
+  app.get("/api/profiles", cacheMiddleware(300), async (req: Request, res: Response) => {
     try {
       const filters: ProfileFilters = {
         search: req.query.search as string,
@@ -150,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/profiles/:id - Get single profile by ID
-  app.get("/api/profiles/:id", async (req: Request, res: Response) => {
+  app.get("/api/profiles/:id", cacheMiddleware(30), async (req: Request, res: Response) => {
     try {
       const profile = await profileService.getById(req.params.id);
       if (!profile) {
@@ -178,8 +178,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const profile = await profileService.create(profileData);
 
-      // Calculate initial Creasearch score
-      await scoringService.updateProfileScore(profile.id);
+      // Invalidate profile caches
+      invalidateCache('/api/profiles');
+
+      // Fire-and-forget: Calculate initial Creasearch score (non-blocking for faster response)
+      scoringService.updateProfileScore(profile.id)
+        .catch(err => logger.error('[Scoring] Failed to calculate initial score:', err));
 
       // Send "profile submitted" confirmation email
       emailService.sendProfileSubmittedEmail(userId, profile.name)
@@ -219,8 +223,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const profile = await profileService.update(profileId, req.body);
 
-      // Recalculate Creasearch score after update
-      await scoringService.updateProfileScore(profileId);
+      // Invalidate profile caches
+      invalidateCache('/api/profiles');
+
+      // Recalculate Creasearch score after update (non-blocking)
+      scoringService.updateProfileScore(profileId)
+        .catch(err => logger.error('[Scoring] Failed to recalculate score:', err));
 
       res.json(profile);
     } catch (error) {
@@ -243,6 +251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await profileService.delete(profileId);
+      invalidateCache('/api/profiles');
       res.status(204).send();
     } catch (error) {
       logger.error("Error deleting profile:", error);
@@ -253,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============= ADMIN ROUTES =============
 
   // GET /api/admin/pending
-  app.get("/api/admin/pending", requireAdmin, async (req: Request, res: Response) => {
+  app.get("/api/admin/pending", requireAdmin, cacheMiddleware(30), async (req: Request, res: Response) => {
     try {
       // TODO: Add strict admin role check here. For now, requireAuth is a start.
       const profiles = await profileService.getPending();
@@ -294,6 +303,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { profile_id: profile.id }
       });
 
+      // Invalidate caches
+      invalidateCache('/api/admin/pending');
+      invalidateCache('/api/profiles');
+      invalidateCache('/api/notifications');
+
       emailService.sendProfileApprovedEmail(profile.user_id, profile.name)
         .catch(err => logger.error('[Email] Failed to send approval email:', err));
       res.json(profile);
@@ -331,6 +345,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         metadata: { profile_id: profile.id, reason }
       });
 
+      // Invalidate caches
+      invalidateCache('/api/admin/pending');
+      invalidateCache('/api/profiles');
+      invalidateCache('/api/notifications');
+
       emailService.sendProfileRejectedEmail(profile.user_id, profile.name, reason)
         .catch(err => logger.error('[Email] Failed to send rejection email:', err));
       res.json(profile);
@@ -346,6 +365,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // TODO: Verify user is admin
       const profileId = req.params.id;
       await profileService.delete(profileId);
+      invalidateCache('/api/admin/pending');
+      invalidateCache('/api/profiles');
       res.json({ success: true, message: "Profile deleted" });
     } catch (error) {
       logger.error("Error deleting profile:", error);
@@ -421,9 +442,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-      // Validate magic bytes dynamically since file-type is ESM only
-      const { fromBuffer } = await import("file-type");
-      const fileType = await fromBuffer(file.buffer);
+      // Validate magic bytes dynamically (handle ESM/CJS interop for file-type)
+      const fileTypeMod = await import("file-type");
+      const fromBufferFn = fileTypeMod.fromBuffer || fileTypeMod.default?.fromBuffer;
+      const fileType = await fromBufferFn(file.buffer);
       if (!fileType || !fileType.mime.startsWith('image/')) {
         return res.status(400).json({ error: "Invalid file type detected by contents" });
       }
@@ -453,9 +475,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-      // Validate magic bytes dynamically
-      const { fromBuffer } = await import("file-type");
-      const fileType = await fromBuffer(file.buffer);
+      // Validate magic bytes dynamically (handle ESM/CJS interop for file-type)
+      const fileTypeMod = await import("file-type");
+      const fromBufferFn = fileTypeMod.fromBuffer || fileTypeMod.default?.fromBuffer;
+      const fileType = await fromBufferFn(file.buffer);
       if (!fileType || !fileType.mime.startsWith('video/')) {
         return res.status(400).json({ error: "Invalid file type detected by contents" });
       }
@@ -478,7 +501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/verify/youtube - Verify YouTube channel and get subscriber count
-  app.post("/api/verify/youtube", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
+  app.post("/api/verify/youtube", requireAuth, verificationRateLimit('youtube'), async (req: Request, res: Response) => {
     try {
       const { channelUrl, profileId } = req.body;
 
@@ -574,7 +597,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/verify/instagram - Queue Instagram verification (background processing)
-  app.post("/api/verify/instagram", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
+  app.post("/api/verify/instagram", requireAuth, verificationRateLimit('instagram'), async (req: Request, res: Response) => {
     try {
       const { profileUrl, profileId, immediate } = req.body;
 
@@ -668,7 +691,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // POST /api/verify/facebook - Queue Facebook verification (background processing)
-  app.post("/api/verify/facebook", requireAuth, sensitiveRateLimit, async (req: Request, res: Response) => {
+  app.post("/api/verify/facebook", requireAuth, verificationRateLimit('facebook'), async (req: Request, res: Response) => {
     try {
       const { profileUrl, profileId, immediate } = req.body;
 
@@ -812,8 +835,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      const isSuccess = result.status === 'VALIDATED';
+      if (!isSuccess) {
+        return res.status(502).json({
+          success: false,
+          warning: 'External verification API failed. The platform may be rate-limiting requests or the profile URL may be invalid.',
+          ...result
+        });
+      }
+
       res.json({
-        success: result.status === 'VALIDATED',
+        success: true,
         ...result
       });
     } catch (error) {
@@ -879,8 +911,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      const isSuccess = result.status === 'VALIDATED';
+      if (!isSuccess) {
+        return res.status(502).json({
+          success: false,
+          warning: 'External verification API failed. The platform may be rate-limiting requests or the profile URL may be invalid.',
+          ...result
+        });
+      }
+
       res.json({
-        success: result.status === 'VALIDATED',
+        success: true,
         ...result
       });
     } catch (error) {
@@ -936,7 +977,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // GET /api/notifications/unread-count - Get unread notification count
-  app.get("/api/notifications/unread-count", requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/notifications/unread-count", requireAuth, cacheMiddleware(30), async (req: Request, res: Response) => {
     try {
       const userId = (req as any).user.id;
       const count = await notificationService.getUnreadCount(userId);
@@ -993,7 +1034,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // GET /api/featured-profiles - Get featured profiles (public)
-  app.get("/api/featured-profiles", async (req: Request, res: Response) => {
+  app.get("/api/featured-profiles", cacheMiddleware(120), async (req: Request, res: Response) => {
     try {
       const profileType = req.query.profile_type as 'creator' | 'organization' | undefined;
       const featured = await featuredProfileService.getAll(profileType);
@@ -1042,6 +1083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      invalidateCache('/api/featured-profiles');
       res.json(featured);
     } catch (error) {
       logger.error("Error featuring profile:", error);
@@ -1064,6 +1106,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         details: {}
       });
 
+      invalidateCache('/api/featured-profiles');
       res.json({ success: true });
     } catch (error) {
       logger.error("Error unfeaturing profile:", error);
