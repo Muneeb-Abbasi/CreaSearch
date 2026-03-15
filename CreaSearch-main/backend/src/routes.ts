@@ -8,7 +8,6 @@ import { requireAuth, requireAdmin } from "./middleware/auth";
 import { logger } from "./utils/logger";
 import { sensitiveRateLimit } from "./middleware/rateLimit";
 import { cacheMiddleware } from "./middleware/cache";
-import { fileTypeFromBuffer } from "file-type";
 
 
 // Configure multer for file uploads
@@ -422,8 +421,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-      // Validate magic bytes
-      const fileType = await fileTypeFromBuffer(file.buffer);
+      // Validate magic bytes dynamically since file-type is ESM only
+      const { fromBuffer } = await import("file-type");
+      const fileType = await fromBuffer(file.buffer);
       if (!fileType || !fileType.mime.startsWith('image/')) {
         return res.status(400).json({ error: "Invalid file type detected by contents" });
       }
@@ -453,8 +453,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!file) return res.status(400).json({ error: "No file uploaded" });
 
-      // Validate magic bytes
-      const fileType = await fileTypeFromBuffer(file.buffer);
+      // Validate magic bytes dynamically
+      const { fromBuffer } = await import("file-type");
+      const fileType = await fromBuffer(file.buffer);
       if (!fileType || !fileType.mime.startsWith('video/')) {
         return res.status(400).json({ error: "Invalid file type detected by contents" });
       }

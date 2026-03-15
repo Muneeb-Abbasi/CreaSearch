@@ -1,0 +1,161 @@
+
+
+---
+
+# 🚨 Updated Issues Identified from Latest Logs
+
+## 🔴 Excessive Repeated Calls to Notification Count Endpoint
+
+* `/api/notifications/unread-count` is still being called very frequently
+* Calls observed multiple times within seconds
+* Many responses return `304`
+* Some responses still taking **600ms – 1500ms**
+
+---
+
+## 🔴 High Latency on Cached Responses
+
+* Several `304 Not Modified` responses showing high response times:
+
+  * `/api/profiles/me` → ~1251ms
+  * `/api/notifications/unread-count` → up to ~1674ms
+  * `/api/featured-profiles` → ~958ms
+  * `/api/admin/pending` → ~875–1116ms
+* Indicates request overhead even when cache is used
+
+---
+
+## 🔴 Profile Fetch Latency Spikes
+
+* Profile detail endpoint:
+
+  * `/api/profiles/{id}` → up to ~2040ms
+* Reviews endpoint:
+
+  * `/api/reviews/{id}` → ~583ms
+* Collaborations endpoint:
+
+  * `/api/collaborations/profile/{id}` → ~300ms+
+
+---
+
+## 🔴 Admin Pending Endpoint Performance Variability
+
+* `/api/admin/pending`
+
+  * Responses ranging:
+
+    * ~843ms
+    * ~957ms
+    * ~1116ms
+* Alternating `200` and `304` responses
+
+---
+
+## 🔴 Cache Behaviour Inconsistency Observed
+
+* Frequent alternation between:
+
+  * `[Cache] MISS`
+  * `[Cache] HIT`
+* Same endpoints repeatedly entering cache MISS state shortly after HIT
+* Example endpoints:
+
+  * `/api/profiles`
+  * `/api/categories`
+  * `/api/profiles?profile_type=organization`
+
+---
+
+## 🔴 Profile Deletion Followed by Repeated 404 Fetches
+
+* After admin deletion of profile:
+
+  * `/api/profiles/me` starts returning `404`
+* Endpoint continues to be called repeatedly after deletion
+* No visible change in request pattern after resource removal
+
+---
+
+## 🔴 Upload Photo Endpoint Runtime Error
+
+* Error logged:
+
+  * `TypeError: fromBuffer is not a function`
+* Resulted in:
+
+  * `POST /api/upload/photo 500`
+* Indicates runtime failure inside upload processing logic
+
+---
+
+## 🔴 Profile Creation Endpoint Slow Response
+
+* `POST /api/profiles`
+
+  * Response time observed ~2539ms
+
+---
+
+## 🔴 Social Verification Still Rate Limited
+
+* Rate limit responses continue:
+
+  * `POST /api/verify/youtube 429`
+  * `POST /api/verify/instagram 429`
+  * `POST /api/verify/facebook 429`
+
+---
+
+## 🔴 Manual Admin Verification External API Failures
+
+* Errors logged:
+
+  * `[Instagram] Apify error: 400 Bad Request`
+  * `[Facebook] Apify error: 400 Bad Request`
+* Despite external failure:
+
+  * Admin verification endpoint returns `200`
+* Observed repeated manual verification attempts on same profile ID
+
+---
+
+## 🔴 Notification Count Response Time Spikes
+
+* Some responses:
+
+  * ~1507ms
+  * ~1021ms
+  * ~1007ms
+* Indicates inconsistent performance behaviour
+
+---
+
+## 🔴 Featured Profiles Endpoint Latency Variability
+
+* `/api/featured-profiles`
+
+  * Response times observed between:
+
+    * ~272ms
+    * ~785ms
+    * ~958ms
+
+---
+
+## 🔴 Continuous Background Fetch Pattern After Major Actions
+
+Observed after:
+
+* profile deletion
+* profile creation
+* verification attempts
+
+System continues high-frequency fetch cycles on:
+
+* notifications
+* profiles
+* admin pending
+* featured profiles
+
+---
